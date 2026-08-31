@@ -7,10 +7,6 @@ export const metadata: Metadata = {
   description:
     'Search any YouTube channel\'s video history by keyword and timeframe. Save videos and channels into a personal library with custom playlists.',
   keywords: ['YouTube', 'channel search', 'video history', 'saved videos', 'playlists'],
-  icons: {
-    icon: '/favicon.jpeg',
-    apple: '/favicon.jpeg',
-  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -19,8 +15,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/favicon.jpeg" type="image/jpeg" />
-        <link rel="apple-touch-icon" href="/favicon.jpeg" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
