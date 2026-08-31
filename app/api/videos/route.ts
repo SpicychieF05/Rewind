@@ -4,38 +4,79 @@ import { sql } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   const channelId = req.nextUrl.searchParams.get('channelId');
-  const rows = channelId
-    ? await sql`
-        SELECT
-          video_id AS "videoId",
-          title,
-          channel_id AS "channelId",
-          channel_name AS "channelName",
-          channel_logo AS "channelLogo",
-          thumbnail,
-          published_at AS "publishedAt",
-          views,
-          likes,
-          saved_at AS "savedAt"
-        FROM saved_videos
-        WHERE channel_id = ${channelId}
-        ORDER BY saved_at DESC
-      `
-    : await sql`
-        SELECT
-          video_id AS "videoId",
-          title,
-          channel_id AS "channelId",
-          channel_name AS "channelName",
-          channel_logo AS "channelLogo",
-          thumbnail,
-          published_at AS "publishedAt",
-          views,
-          likes,
-          saved_at AS "savedAt"
-        FROM saved_videos
-        ORDER BY saved_at DESC
-      `;
+  const q = req.nextUrl.searchParams.get('q')?.trim();
+
+  let rows;
+  if (channelId && q) {
+    const searchPattern = `%${q}%`;
+    rows = await sql`
+      SELECT
+        video_id AS "videoId",
+        title,
+        channel_id AS "channelId",
+        channel_name AS "channelName",
+        channel_logo AS "channelLogo",
+        thumbnail,
+        published_at AS "publishedAt",
+        views,
+        likes,
+        saved_at AS "savedAt"
+      FROM saved_videos
+      WHERE channel_id = ${channelId} AND title ILIKE ${searchPattern}
+      ORDER BY saved_at DESC
+    `;
+  } else if (channelId) {
+    rows = await sql`
+      SELECT
+        video_id AS "videoId",
+        title,
+        channel_id AS "channelId",
+        channel_name AS "channelName",
+        channel_logo AS "channelLogo",
+        thumbnail,
+        published_at AS "publishedAt",
+        views,
+        likes,
+        saved_at AS "savedAt"
+      FROM saved_videos
+      WHERE channel_id = ${channelId}
+      ORDER BY saved_at DESC
+    `;
+  } else if (q) {
+    const searchPattern = `%${q}%`;
+    rows = await sql`
+      SELECT
+        video_id AS "videoId",
+        title,
+        channel_id AS "channelId",
+        channel_name AS "channelName",
+        channel_logo AS "channelLogo",
+        thumbnail,
+        published_at AS "publishedAt",
+        views,
+        likes,
+        saved_at AS "savedAt"
+      FROM saved_videos
+      WHERE title ILIKE ${searchPattern}
+      ORDER BY saved_at DESC
+    `;
+  } else {
+    rows = await sql`
+      SELECT
+        video_id AS "videoId",
+        title,
+        channel_id AS "channelId",
+        channel_name AS "channelName",
+        channel_logo AS "channelLogo",
+        thumbnail,
+        published_at AS "publishedAt",
+        views,
+        likes,
+        saved_at AS "savedAt"
+      FROM saved_videos
+      ORDER BY saved_at DESC
+    `;
+  }
   return NextResponse.json(rows);
 }
 

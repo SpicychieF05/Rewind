@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useRef, useEffect } from 'react';
+import type { VideoResult } from '@/lib/youtube';
 
 export default function NavBar() {
   const pathname = usePathname();
@@ -10,18 +11,176 @@ export default function NavBar() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [navQuery, setNavQuery] = useState('');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [results, setResults] = useState<VideoResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
+  const mobileSearchBoxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (searchOpen) inputRef.current?.focus();
   }, [searchOpen]);
 
+  // Click outside listener to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        searchBoxRef.current &&
+        !searchBoxRef.current.contains(e.target as Node) &&
+        mobileSearchBoxRef.current &&
+        !mobileSearchBoxRef.current.contains(e.target as Node)
+      ) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Debounced search for saved videos by title
+  useEffect(() => {
+    const trimmed = navQuery.trim();
+    if (!trimmed) {
+      setResults([]);
+      setIsSearching(false);
+      setHasSearched(false);
+      return;
+    }
+
+    setIsSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/videos?q=${encodeURIComponent(trimmed)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setResults(Array.isArray(data) ? data : []);
+        } else {
+          setResults([]);
+        }
+      } catch {
+        setResults([]);
+      } finally {
+        setIsSearching(false);
+        setHasSearched(true);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [navQuery]);
+
   const handleNavSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (navQuery.trim()) {
-      router.push(`/?q=${encodeURIComponent(navQuery.trim())}`);
+    const query = navQuery.trim();
+    if (query) {
+      setDropdownOpen(false);
       setSearchOpen(false);
+      router.push(`/saved?q=${encodeURIComponent(query)}`);
     }
+  };
+
+  const handleGoToChannelSearch = () => {
+    const query = navQuery.trim();
+    setDropdownOpen(false);
+    setSearchOpen(false);
+    if (query) {
+      router.push(`/?q=${encodeURIComponent(query)}`);
+    } else {
+      router.push('/');
+    }
+  };
+
+  const renderDropdownContent = () => {
+    if (isSearching) {
+      return (
+        <div className="nav-dropdown-loading">
+          <span className="spinner" aria-hidden="true" />
+          <span>Searching saved videos…</span>
+        </div>
+      );
+    }
+
+    if (hasSearched && results.length === 0) {
+      return (
+        <div className="nav-dropdown-empty" role="status">
+          <div className="empty-icon-wrap">
+            <BookmarkIcon />
+          </div>
+          <p className="empty-title">No saved videos found</p>
+          <p className="empty-desc">
+            No saved videos match <strong className="query-highlight">"{navQuery.trim()}"</strong>. Search a channel's videos on the home page first to find and save them!
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm empty-action-btn"
+            onClick={handleGoToChannelSearch}
+          >
+            <SearchIcon />
+            <span>Search Channel Videos on Home</span>
+          </button>
+        </div>
+      );
+    }
+
+    if (results.length > 0) {
+      return (
+        <div className="nav-dropdown-results">
+          <div className="dropdown-header">
+            <span className="dropdown-title">Saved Videos ({results.length})</span>
+            <Link
+              href={`/saved?q=${encodeURIComponent(navQuery.trim())}`}
+              onClick={() => setDropdownOpen(false)}
+              className="dropdown-view-all-link"
+            >
+              View in Saved
+            </Link>
+          </div>
+          <ul className="dropdown-list">
+            {results.slice(0, 5).map((vid) => (
+              <li key={vid.videoId}>
+                <a
+                  href={`https://www.youtube.com/watch?v=${vid.videoId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="dropdown-item"
+                  onClick={() => setDropdownOpen(false)}
+                >
+                  <div className="dropdown-thumb-wrap">
+                    {vid.thumbnail ? (
+                      <img src={vid.thumbnail} alt={vid.title} className="dropdown-thumb" />
+                    ) : (
+                      <div className="dropdown-thumb-placeholder">▶</div>
+                    )}
+                  </div>
+                  <div className="dropdown-item-info">
+                    <span className="dropdown-item-title line-clamp-2">{vid.title}</span>
+                    <span className="dropdown-item-channel">{vid.channelName || 'YouTube'}</span>
+                  </div>
+                  <span className="dropdown-play-icon" title="Watch on YouTube">
+                    <PlayIconSmall />
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+          {results.length > 5 && (
+            <div className="dropdown-footer">
+              <Link
+                href={`/saved?q=${encodeURIComponent(navQuery.trim())}`}
+                onClick={() => setDropdownOpen(false)}
+                className="dropdown-footer-btn"
+              >
+                View all {results.length} saved results →
+              </Link>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -70,33 +229,66 @@ export default function NavBar() {
             <span className="navbar-logo-text">Rewind</span>
           </Link>
 
-          {/* Centre: Search bar (hidden on mobile by default) */}
-          <form
-            className={`navbar-search-form ${searchOpen ? 'search-open' : ''}`}
-            onSubmit={handleNavSearch}
-            role="search"
-            aria-label="Search videos"
+          {/* Centre: Search bar for saved videos */}
+          <div
+            ref={searchBoxRef}
+            className={`navbar-search-container ${searchOpen ? 'search-open' : ''}`}
           >
-            <div className="navbar-search-box" suppressHydrationWarning>
-              <input
-                ref={inputRef}
-                id="nav-search-input"
-                type="search"
-                className="navbar-search-input"
-                placeholder="Search a channel's videos…"
-                value={navQuery}
-                onChange={(e) => setNavQuery(e.target.value)}
-                aria-label="Search query"
-              />
-              <button
-                type="submit"
-                className="navbar-search-btn"
-                aria-label="Submit search"
-              >
-                <SearchIcon />
-              </button>
-            </div>
-          </form>
+            <form
+              className="navbar-search-form"
+              onSubmit={handleNavSearch}
+              role="search"
+              aria-label="Search saved videos"
+            >
+              <div className="navbar-search-box" suppressHydrationWarning>
+                <input
+                  ref={inputRef}
+                  id="nav-search-input"
+                  type="search"
+                  className="navbar-search-input"
+                  placeholder="Search saved videos by title…"
+                  value={navQuery}
+                  onChange={(e) => {
+                    setNavQuery(e.target.value);
+                    setDropdownOpen(true);
+                  }}
+                  onFocus={() => {
+                    if (navQuery.trim()) setDropdownOpen(true);
+                  }}
+                  aria-label="Search saved videos"
+                />
+                {navQuery && (
+                  <button
+                    type="button"
+                    className="navbar-search-clear-btn"
+                    onClick={() => {
+                      setNavQuery('');
+                      setDropdownOpen(false);
+                      inputRef.current?.focus();
+                    }}
+                    aria-label="Clear search input"
+                  >
+                    <CloseIconSmall />
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  className="navbar-search-btn"
+                  aria-label="Search saved videos"
+                  title="Search saved videos"
+                >
+                  <SearchIcon />
+                </button>
+              </div>
+            </form>
+
+            {/* Desktop Autocomplete Dropdown */}
+            {dropdownOpen && navQuery.trim() && (
+              <div className="nav-dropdown-menu" role="dialog" aria-label="Saved video search results">
+                {renderDropdownContent()}
+              </div>
+            )}
+          </div>
 
           {/* Right: actions */}
           <div className="navbar-actions" suppressHydrationWarning>
@@ -104,7 +296,10 @@ export default function NavBar() {
             <button
               id="nav-search-toggle"
               className="btn-icon navbar-mobile-search"
-              onClick={() => setSearchOpen((v) => !v)}
+              onClick={() => {
+                setSearchOpen((v) => !v);
+                setDropdownOpen(true);
+              }}
               aria-label="Open search"
               aria-expanded={searchOpen}
             >
@@ -137,14 +332,17 @@ export default function NavBar() {
 
         {/* Mobile: expanded search row */}
         {searchOpen && (
-          <div className="navbar-mobile-searchrow">
+          <div ref={mobileSearchBoxRef} className="navbar-mobile-searchrow">
             <form onSubmit={handleNavSearch} className="w-full flex gap-2">
               <input
                 type="search"
                 className="input"
-                placeholder="Search a channel's videos…"
+                placeholder="Search saved videos by title…"
                 value={navQuery}
-                onChange={(e) => setNavQuery(e.target.value)}
+                onChange={(e) => {
+                  setNavQuery(e.target.value);
+                  setDropdownOpen(true);
+                }}
                 autoFocus
                 aria-label="Mobile search query"
               />
@@ -152,6 +350,11 @@ export default function NavBar() {
                 <SearchIcon />
               </button>
             </form>
+            {dropdownOpen && navQuery.trim() && (
+              <div className="nav-dropdown-menu mobile-dropdown" role="dialog">
+                {renderDropdownContent()}
+              </div>
+            )}
           </div>
         )}
       </nav>
@@ -204,17 +407,27 @@ export default function NavBar() {
           letter-spacing: -0.5px;
           line-height: 1;
         }
-        .navbar-search-form {
+        .navbar-search-container {
+          position: relative;
           flex: 1;
           max-width: 640px;
           margin: 0 auto;
         }
+        .navbar-search-form {
+          width: 100%;
+        }
         .navbar-search-box {
           display: flex;
+          align-items: center;
           border: 1px solid var(--border);
           border-radius: var(--radius-full);
           overflow: hidden;
           background-color: var(--bg-primary);
+          transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+        }
+        .navbar-search-box:focus-within {
+          border-color: #1c62b9;
+          box-shadow: 0 0 0 1px #1c62b9;
         }
         .navbar-search-input {
           flex: 1;
@@ -224,15 +437,29 @@ export default function NavBar() {
           padding: var(--space-2) var(--space-4);
           color: var(--text-primary);
           font-size: var(--text-base);
+          min-width: 0;
         }
         .navbar-search-input::placeholder {
           color: var(--text-muted);
+        }
+        .navbar-search-clear-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0 var(--space-2);
+          color: var(--text-muted);
+          cursor: pointer;
+          transition: color var(--transition-fast);
+        }
+        .navbar-search-clear-btn:hover {
+          color: var(--text-primary);
         }
         .navbar-search-btn {
           display: flex;
           align-items: center;
           justify-content: center;
           padding: 0 var(--space-4);
+          height: 38px;
           background-color: var(--bg-secondary);
           border-left: 1px solid var(--border);
           color: var(--text-primary);
@@ -242,6 +469,197 @@ export default function NavBar() {
         .navbar-search-btn:hover {
           background-color: var(--bg-hover);
         }
+
+        /* Autocomplete dropdown */
+        .nav-dropdown-menu {
+          position: absolute;
+          top: calc(100% + 6px);
+          left: 0;
+          right: 0;
+          background-color: var(--bg-secondary);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-lg);
+          box-shadow: var(--shadow-lg);
+          z-index: 200;
+          overflow: hidden;
+          animation: dropDownAnim 0.18s ease-out;
+        }
+        .mobile-dropdown {
+          position: relative;
+          top: var(--space-2);
+          left: 0;
+          right: 0;
+        }
+        @keyframes dropDownAnim {
+          from {
+            opacity: 0;
+            transform: translateY(-6px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .nav-dropdown-loading {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: var(--space-3);
+          padding: var(--space-5);
+          color: var(--text-muted);
+          font-size: var(--text-sm);
+        }
+        .nav-dropdown-empty {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+          padding: var(--space-5) var(--space-4);
+          gap: var(--space-2);
+        }
+        .empty-icon-wrap {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 44px;
+          height: 44px;
+          border-radius: var(--radius-full);
+          background-color: rgba(255, 30, 64, 0.15);
+          color: #ff1e40;
+          margin-bottom: var(--space-1);
+        }
+        .empty-title {
+          font-size: var(--text-base);
+          font-weight: 600;
+          color: var(--text-primary);
+        }
+        .empty-desc {
+          font-size: var(--text-xs);
+          color: var(--text-secondary);
+          max-width: 380px;
+          line-height: 1.45;
+        }
+        .query-highlight {
+          color: var(--text-primary);
+        }
+        .empty-action-btn {
+          margin-top: var(--space-2);
+          font-size: var(--text-xs);
+          padding: var(--space-2) var(--space-4);
+          border-radius: var(--radius-full);
+        }
+        .nav-dropdown-results {
+          display: flex;
+          flex-direction: column;
+        }
+        .dropdown-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: var(--space-2) var(--space-4);
+          background-color: var(--bg-tertiary);
+          border-bottom: 1px solid var(--border-subtle);
+          font-size: var(--text-xs);
+          font-weight: 600;
+          color: var(--text-secondary);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .dropdown-view-all-link {
+          color: #3ea6ff;
+          font-weight: 500;
+          text-transform: none;
+          letter-spacing: normal;
+        }
+        .dropdown-view-all-link:hover {
+          text-decoration: underline;
+        }
+        .dropdown-list {
+          display: flex;
+          flex-direction: column;
+          max-height: 320px;
+          overflow-y: auto;
+        }
+        .dropdown-item {
+          display: flex;
+          align-items: center;
+          gap: var(--space-3);
+          padding: var(--space-2) var(--space-4);
+          border-bottom: 1px solid var(--border-subtle);
+          transition: background-color var(--transition-fast);
+          text-decoration: none;
+          color: inherit;
+        }
+        .dropdown-item:last-child {
+          border-bottom: none;
+        }
+        .dropdown-item:hover {
+          background-color: var(--bg-hover);
+        }
+        .dropdown-thumb-wrap {
+          width: 56px;
+          aspect-ratio: 16 / 9;
+          border-radius: var(--radius-sm);
+          overflow: hidden;
+          background-color: var(--bg-primary);
+          flex-shrink: 0;
+        }
+        .dropdown-thumb {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        .dropdown-thumb-placeholder {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 10px;
+          color: var(--text-muted);
+        }
+        .dropdown-item-info {
+          flex: 1;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .dropdown-item-title {
+          font-size: var(--text-sm);
+          font-weight: 500;
+          color: var(--text-primary);
+          line-height: 1.3;
+        }
+        .dropdown-item-channel {
+          font-size: var(--text-xs);
+          color: var(--text-secondary);
+        }
+        .dropdown-play-icon {
+          color: var(--text-muted);
+          flex-shrink: 0;
+          opacity: 0.6;
+          transition: opacity var(--transition-fast), color var(--transition-fast);
+        }
+        .dropdown-item:hover .dropdown-play-icon {
+          opacity: 1;
+          color: #ff1e40;
+        }
+        .dropdown-footer {
+          padding: var(--space-2) var(--space-4);
+          background-color: var(--bg-tertiary);
+          border-top: 1px solid var(--border-subtle);
+          text-align: center;
+        }
+        .dropdown-footer-btn {
+          font-size: var(--text-xs);
+          font-weight: 500;
+          color: var(--text-secondary);
+        }
+        .dropdown-footer-btn:hover {
+          color: var(--text-primary);
+        }
+
         .navbar-actions {
           display: flex;
           align-items: center;
@@ -264,11 +682,8 @@ export default function NavBar() {
           .navbar {
             height: auto;
           }
-          .navbar-search-form {
+          .navbar-search-container {
             display: none;
-          }
-          .navbar-search-form.search-open {
-            display: none; /* handled by mobile row */
           }
           .navbar-mobile-search { display: flex; }
           .navbar-mobile-menu   { display: flex; }
@@ -302,6 +717,23 @@ function MenuIcon() {
       <line x1="3" y1="12" x2="21" y2="12"/>
       <line x1="3" y1="6" x2="21" y2="6"/>
       <line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  );
+}
+
+function CloseIconSmall() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="18" y1="6" x2="6" y2="18"/>
+      <line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
+  );
+}
+
+function PlayIconSmall() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <polygon points="5 3 19 12 5 21 5 3"/>
     </svg>
   );
 }

@@ -177,9 +177,18 @@ function PlaylistPicker({ video, playlists, onAdd, onClose }: PlaylistPickerProp
 
 // ── Main Saved Page ───────────────────────────────────────────────────────────
 
-export default function SavedPage() {
-  const [activeTab, setActiveTab] = useState<SavedTab>('channels');
+import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { Suspense } from 'react';
+
+function SavedPageContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const urlQuery = searchParams.get('q') || '';
+
+  const [activeTab, setActiveTab] = useState<SavedTab>(urlQuery ? 'videos' : 'channels');
   const [activeChannelFilter, setActiveChannelFilter] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState(urlQuery);
 
   const [channels, setChannels] = useState<SavedChannel[]>([]);
   const [videos, setVideos] = useState<VideoResult[]>([]);
@@ -187,6 +196,13 @@ export default function SavedPage() {
   const [loading, setLoading] = useState(true);
 
   const [playlistPicker, setPlaylistPicker] = useState<VideoResult | null>(null);
+
+  useEffect(() => {
+    setSearchQuery(urlQuery);
+    if (urlQuery) {
+      setActiveTab('videos');
+    }
+  }, [urlQuery]);
 
   const normalizeVideo = (v: Record<string, unknown>): VideoResult => ({
     videoId:     (v.videoId as string) || (v.video_id as string) || '',
@@ -223,10 +239,14 @@ export default function SavedPage() {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  // Filter videos by channel
-  const filteredVideos = activeChannelFilter
-    ? videos.filter((v) => v.channelId === activeChannelFilter)
-    : videos;
+  // Filter videos by channel and title search query
+  const filteredVideos = videos.filter((v) => {
+    if (activeChannelFilter && v.channelId !== activeChannelFilter) return false;
+    if (searchQuery.trim() && !v.title.toLowerCase().includes(searchQuery.trim().toLowerCase())) {
+      return false;
+    }
+    return true;
+  });
 
   const filteredPlaylists = activeChannelFilter
     ? playlists // playlist filtering is done server-side on expand
@@ -251,23 +271,43 @@ export default function SavedPage() {
     setVideos((prev) => prev.filter((v) => v.videoId !== videoId));
   };
 
+  const clearSearchFilter = () => {
+    setSearchQuery('');
+    router.push('/saved', { scroll: false });
+  };
+
   return (
     <div className="container" style={{ paddingTop: 'var(--space-5)', paddingBottom: 'var(--space-12)' }}>
       <h1 className="saved-heading">Saved Library</h1>
 
-      {/* Channel filter chip */}
-      {activeChannelFilter && (
-        <div id="channel-filter-chip" className="filter-chip" role="status" aria-live="polite">
-          <span>Filtered by: <strong>{channels.find((c) => c.channel_id === activeChannelFilter)?.name}</strong></span>
-          <button
-            className="btn-icon filter-chip-close"
-            onClick={() => setActiveChannelFilter(null)}
-            aria-label="Clear channel filter"
-          >
-            <XIcon />
-          </button>
-        </div>
-      )}
+      {/* Filter chips (Channel & Search query) */}
+      <div className="filter-chips-container" style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+        {activeChannelFilter && (
+          <div id="channel-filter-chip" className="filter-chip" role="status" aria-live="polite">
+            <span>Filtered by channel: <strong>{channels.find((c) => c.channel_id === activeChannelFilter)?.name}</strong></span>
+            <button
+              className="btn-icon filter-chip-close"
+              onClick={() => setActiveChannelFilter(null)}
+              aria-label="Clear channel filter"
+            >
+              <XIcon />
+            </button>
+          </div>
+        )}
+
+        {searchQuery.trim() && (
+          <div id="search-filter-chip" className="filter-chip" role="status" aria-live="polite">
+            <span>Title search: <strong>"{searchQuery.trim()}"</strong></span>
+            <button
+              className="btn-icon filter-chip-close"
+              onClick={clearSearchFilter}
+              aria-label="Clear search filter"
+            >
+              <XIcon />
+            </button>
+          </div>
+        )}
+      </div>
 
       <SavedTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
@@ -317,10 +357,43 @@ export default function SavedPage() {
               aria-labelledby="tab-videos"
             >
               {filteredVideos.length === 0 ? (
-                <div className="empty-state">
+                <div className="empty-state" role="status">
                   <VideoIcon />
-                  <h3>{activeChannelFilter ? 'No saved videos from this channel' : 'No saved videos'}</h3>
-                  <p>Save videos from search results to build your library.</p>
+                  <h3>
+                    {searchQuery.trim()
+                      ? `No saved videos matching "${searchQuery.trim()}"`
+                      : activeChannelFilter
+                      ? 'No saved videos from this channel'
+                      : 'No saved videos'}
+                  </h3>
+                  <p>
+                    {searchQuery.trim()
+                      ? "You haven't saved any videos matching this title yet. Search a channel's videos on the home page first to find and save them to your library!"
+                      : activeChannelFilter
+                      ? 'No saved videos found for this channel.'
+                      : 'Save videos from search results to build your library.'}
+                  </p>
+                  {searchQuery.trim() ? (
+                    <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: 'var(--space-3)', flexWrap: 'wrap', justifyContent: 'center' }}>
+                      <Link
+                        href={`/?q=${encodeURIComponent(searchQuery.trim())}`}
+                        className="btn btn-primary"
+                      >
+                        Search Channel Videos on Home
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={clearSearchFilter}
+                        className="btn btn-ghost"
+                      >
+                        Clear search
+                      </button>
+                    </div>
+                  ) : (
+                    <Link href="/" className="btn btn-primary" style={{ marginTop: 'var(--space-3)' }}>
+                      Search Channel Videos
+                    </Link>
+                  )}
                 </div>
               ) : (
                 <div
@@ -384,7 +457,6 @@ export default function SavedPage() {
           padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
           font-size: var(--text-sm);
           color: var(--text-secondary);
-          margin-bottom: var(--space-3);
         }
         .filter-chip-close {
           width: 20px;
@@ -393,6 +465,14 @@ export default function SavedPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function SavedPage() {
+  return (
+    <Suspense>
+      <SavedPageContent />
+    </Suspense>
   );
 }
 
