@@ -1,15 +1,3 @@
-/**
- * lib/channelResolver.ts
- *
- * Accepts any of:
- *   - Full URL:  https://www.youtube.com/channel/UCxxxxxx
- *   - Handle URL: https://www.youtube.com/@handle  (or youtube.com/c/name)
- *   - Raw @handle: @mkbhd
- *   - Raw channel ID: UCxxxxxx  (starts with "UC")
- *
- * Returns canonical { channelId, name, logo, subscriberCount }
- */
-
 const YT_API_BASE = 'https://www.googleapis.com/youtube/v3';
 
 export interface ChannelMeta {
