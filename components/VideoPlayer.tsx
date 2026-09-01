@@ -204,10 +204,6 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
       role="dialog"
       aria-label="In-app video player"
     >
-      {/* Theater dimming backdrop */}
-      {isTheater && (
-        <div className="theater-backdrop" aria-hidden="true" onClick={onClose} />
-      )}
 
       <div className="player-shell" ref={containerRef}>
         {/* ── Top bar ── */}
@@ -335,12 +331,10 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           overflow-y: auto;
         }
 
-        /* Theater: dim the backdrop */
-        .theater-backdrop {
-          position: fixed;
-          inset: 0;
-          background-color: rgba(0, 0, 0, 0.9);
-          z-index: -1;
+        /* Theater: full-black, no scroll — mirrors YouTube theater mode */
+        .player-overlay.theater {
+          background-color: #000;
+          overflow: hidden;
         }
 
         /* ── Shell ── */
@@ -475,12 +469,31 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           line-height: 1.6;
         }
 
-        /* Theater: player goes full width, no panel */
+        /* Theater: shell fills viewport height, no padding overflow */
+        .theater .player-shell {
+          height: calc(100vh - var(--nav-height));
+          max-width: 100%;
+          padding: var(--space-2) var(--space-4) 0;
+          overflow: hidden;
+        }
+
+        /* Theater: single-column, fill remaining height */
         .theater .player-content {
+          flex: 1;
+          min-height: 0;
           flex-direction: column;
         }
         .theater .player-area {
+          flex: 1;
+          min-height: 0;
           width: 100%;
+        }
+
+        /* Theater: max-height drives sizing, aspect-ratio adjusts width proportionally */
+        .theater .player-iframe-wrap {
+          width: 100%;
+          max-height: calc(100vh - var(--nav-height) - 54px); /* 54px = topbar row + gap */
+          border-radius: 0;
         }
 
         /* ── Saved Videos panel ── */
