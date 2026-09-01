@@ -45,6 +45,17 @@ export default function SearchForm({ onSearch, loading, initialQuery = '' }: Pro
     onSearch({ channelInput: channelInput.trim(), query: query.trim(), matchMode, timeframe });
   };
 
+  const handleReset = () => {
+    setChannelInput('');
+    setQuery('');
+    setMatchMode('contains');
+    setTimeframe('1year');
+    // Full page reload to clear results and URL state
+    window.location.href = '/';
+  };
+
+  const isDirty = channelInput.trim() !== '' || query.trim() !== '';
+
   return (
     <form
       id="search-form"
@@ -132,7 +143,7 @@ export default function SearchForm({ onSearch, loading, initialQuery = '' }: Pro
         </select>
       </div>
 
-      {/* Submit */}
+      {/* Submit + Reset */}
       <div className="search-field search-field-submit" suppressHydrationWarning>
         <button
           id="search-submit-btn"
@@ -143,6 +154,19 @@ export default function SearchForm({ onSearch, loading, initialQuery = '' }: Pro
         >
           {loading ? <><span className="spinner" aria-hidden="true" /> Searching…</> : 'Search'}
         </button>
+        {isDirty && !loading && (
+          <button
+            id="search-reset-btn"
+            type="button"
+            className="btn btn-ghost search-reset"
+            onClick={handleReset}
+            aria-label="Clear search and reset page"
+            title="Clear all fields and reload"
+          >
+            <ResetIcon />
+            Reset
+          </button>
+        )}
       </div>
 
       <style jsx>{`
@@ -197,6 +221,14 @@ export default function SearchForm({ onSearch, loading, initialQuery = '' }: Pro
           font-weight: 500;
         }
         .search-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+        .search-reset {
+          height: 38px;
+          padding: 0 var(--space-4);
+          border-radius: var(--radius-sm);
+          font-size: var(--text-sm);
+          font-weight: 500;
+          margin-top: var(--space-2);
+        }
 
         @media (max-width: 640px) {
           .search-form { flex-direction: column; }
@@ -204,8 +236,18 @@ export default function SearchForm({ onSearch, loading, initialQuery = '' }: Pro
           .search-field-narrow,
           .search-field-submit { min-width: unset; width: 100%; flex: unset; }
           .search-submit { width: 100%; justify-content: center; }
+          .search-reset  { width: 100%; justify-content: center; }
         }
       `}</style>
     </form>
+  );
+}
+
+function ResetIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="1 4 1 10 7 10" />
+      <path d="M3.51 15a9 9 0 1 0 .49-3.5" />
+    </svg>
   );
 }
