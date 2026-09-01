@@ -140,16 +140,21 @@ export default function NavBar() {
           <ul className="dropdown-list">
             {results.slice(0, 5).map((vid) => (
               <li key={vid.videoId}>
-                <a
-                  href={`https://www.youtube.com/watch?v=${vid.videoId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <Link
+                  href={`/saved?q=${encodeURIComponent(navQuery.trim())}`}
                   className="dropdown-item"
-                  onClick={() => setDropdownOpen(false)}
+                  onClick={() => { setDropdownOpen(false); setSearchOpen(false); }}
+                  aria-label={`View "${vid.title}" in Saved library`}
                 >
                   <div className="dropdown-thumb-wrap">
                     {vid.thumbnail ? (
-                      <img src={vid.thumbnail} alt={vid.title} className="dropdown-thumb" />
+                      <img
+                        src={vid.thumbnail}
+                        alt={vid.title}
+                        className="dropdown-thumb"
+                        width={56}
+                        height={32}
+                      />
                     ) : (
                       <div className="dropdown-thumb-placeholder">▶</div>
                     )}
@@ -158,10 +163,8 @@ export default function NavBar() {
                     <span className="dropdown-item-title line-clamp-2">{vid.title}</span>
                     <span className="dropdown-item-channel">{vid.channelName || 'YouTube'}</span>
                   </div>
-                  <span className="dropdown-play-icon" title="Watch on YouTube">
-                    <PlayIconSmall />
-                  </span>
-                </a>
+                  <span className="dropdown-go-icon" aria-hidden="true">›</span>
+                </Link>
               </li>
             ))}
           </ul>
@@ -177,6 +180,7 @@ export default function NavBar() {
             </div>
           )}
         </div>
+
       );
     }
 
@@ -606,9 +610,11 @@ export default function NavBar() {
           flex-shrink: 0;
         }
         .dropdown-thumb {
-          width: 100%;
-          height: 100%;
+          width: 56px;
+          height: 32px;
           object-fit: cover;
+          display: block;
+          flex-shrink: 0;
         }
         .dropdown-thumb-placeholder {
           width: 100%;
@@ -636,15 +642,15 @@ export default function NavBar() {
           font-size: var(--text-xs);
           color: var(--text-secondary);
         }
-        .dropdown-play-icon {
+        .dropdown-go-icon {
           color: var(--text-muted);
           flex-shrink: 0;
-          opacity: 0.6;
-          transition: opacity var(--transition-fast), color var(--transition-fast);
+          font-size: 20px;
+          line-height: 1;
+          transition: color var(--transition-fast);
         }
-        .dropdown-item:hover .dropdown-play-icon {
-          opacity: 1;
-          color: #ff1e40;
+        .dropdown-item:hover .dropdown-go-icon {
+          color: var(--text-primary);
         }
         .dropdown-footer {
           padding: var(--space-2) var(--space-4);
