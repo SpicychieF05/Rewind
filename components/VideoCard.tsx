@@ -10,6 +10,8 @@ interface Props {
   onUnsave?: (videoId: string) => Promise<void>;
   onAddToPlaylist?: (video: VideoResult) => void;
   showAddToPlaylist?: boolean;
+  /** When provided, clicking the thumbnail or title opens the in-app player instead of navigating to YouTube. */
+  onPlay?: (video: VideoResult) => void;
 }
 
 export default function VideoCard({
@@ -19,6 +21,7 @@ export default function VideoCard({
   onUnsave,
   onAddToPlaylist,
   showAddToPlaylist = false,
+  onPlay,
 }: Props) {
   const [saved, setSaved] = useState(isSaved);
   const [savingState, setSavingState] = useState<'idle' | 'loading'>('idle');
@@ -43,16 +46,24 @@ export default function VideoCard({
     }
   };
 
+  const handlePlay = (e: React.MouseEvent) => {
+    if (onPlay) {
+      e.preventDefault();
+      onPlay(video);
+    }
+  };
+
   return (
     <article className="video-card" aria-label={`Video: ${video.title}`}>
       {/* Thumbnail */}
       <a
         href={ytUrl}
-        target="_blank"
-        rel="noopener noreferrer"
+        target={onPlay ? undefined : '_blank'}
+        rel={onPlay ? undefined : 'noopener noreferrer'}
         className="thumbnail-link"
-        aria-label={`Watch "${video.title}" on YouTube`}
+        aria-label={onPlay ? `Play "${video.title}" in Rewind` : `Watch "${video.title}" on YouTube`}
         id={`video-${video.videoId}`}
+        onClick={handlePlay}
       >
         <div className="thumbnail-wrapper">
           {video.thumbnail ? (
@@ -102,10 +113,11 @@ export default function VideoCard({
         <div className="video-text">
           <a
             href={ytUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+            target={onPlay ? undefined : '_blank'}
+            rel={onPlay ? undefined : 'noopener noreferrer'}
             className="video-title line-clamp-2"
             title={video.title || 'Untitled'}
+            onClick={handlePlay}
           >
             {video.title || 'Untitled'}
           </a>

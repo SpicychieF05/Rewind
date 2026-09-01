@@ -12,13 +12,14 @@ interface Props {
   videos: PlaylistVideo[];
   onSave: (orderedVideoIds: string[]) => Promise<void>;
   onClose: () => void;
+  onPlay?: (video: VideoResult) => void;
 }
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-export default function PlaylistOrderModal({ playlistName, videos, onSave, onClose }: Props) {
+export default function PlaylistOrderModal({ playlistName, videos, onSave, onClose, onPlay }: Props) {
   const [items, setItems] = useState<PlaylistVideo[]>([...videos].sort((a, b) => a.position - b.position));
   const [saving, setSaving] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -150,11 +151,12 @@ export default function PlaylistOrderModal({ playlistName, videos, onSave, onClo
               {/* Thumbnail */}
               <a
                 href={`https://www.youtube.com/watch?v=${video.videoId}`}
-                target="_blank"
-                rel="noopener noreferrer"
+                target={onPlay ? undefined : '_blank'}
+                rel={onPlay ? undefined : 'noopener noreferrer'}
                 className="order-thumb-link"
                 tabIndex={-1}
-                aria-label={`Watch ${video.title} on YouTube`}
+                aria-label={onPlay ? `Play ${video.title} in Rewind` : `Watch ${video.title} on YouTube`}
+                onClick={(e) => { if (onPlay) { e.preventDefault(); onPlay(video); } }}
               >
                 {video.thumbnail ? (
                   <img

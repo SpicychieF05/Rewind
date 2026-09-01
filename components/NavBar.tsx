@@ -233,6 +233,7 @@ export default function NavBar() {
           <div
             ref={searchBoxRef}
             className={`navbar-search-container ${searchOpen ? 'search-open' : ''}`}
+            suppressHydrationWarning
           >
             <form
               className="navbar-search-form"

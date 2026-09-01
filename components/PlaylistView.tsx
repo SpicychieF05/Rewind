@@ -18,9 +18,10 @@ interface PlaylistVideo extends VideoResult {
 interface Props {
   playlists: Playlist[];
   onRefresh: () => void;
+  onPlay?: (video: VideoResult) => void;
 }
 
-export default function PlaylistView({ playlists, onRefresh }: Props) {
+export default function PlaylistView({ playlists, onRefresh, onPlay }: Props) {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -300,9 +301,10 @@ export default function PlaylistView({ playlists, onRefresh }: Props) {
                         <span className="pv-num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
                         <a
                           href={`https://www.youtube.com/watch?v=${v.videoId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          aria-label={`Watch ${v.title} on YouTube`}
+                          target={onPlay ? undefined : '_blank'}
+                          rel={onPlay ? undefined : 'noopener noreferrer'}
+                          aria-label={onPlay ? `Play ${v.title} in Rewind` : `Watch ${v.title} on YouTube`}
+                          onClick={(e) => { if (onPlay) { e.preventDefault(); onPlay(v); } }}
                         >
                           {v.thumbnail && (
                             <img src={v.thumbnail} alt="" className="pv-thumb" width={60} height={34} loading="lazy" />
@@ -326,6 +328,7 @@ export default function PlaylistView({ playlists, onRefresh }: Props) {
           videos={orderModal.videos}
           onSave={handleSaveOrder}
           onClose={() => setOrderModal(null)}
+          onPlay={onPlay}
         />
       )}
 

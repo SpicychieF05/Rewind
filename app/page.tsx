@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import SearchForm, { type SearchFormValues } from '@/components/SearchForm';
 import VideoCard from '@/components/VideoCard';
+import VideoPlayer from '@/components/VideoPlayer';
 import QuotaBanner from '@/components/QuotaBanner';
 import LoadMoreButton from '@/components/LoadMoreButton';
 import type { VideoResult } from '@/lib/youtube';
@@ -35,6 +36,8 @@ function HomePage() {
   const initialQuery = searchParams.get('q') ?? '';
 
   const [savedVideoIds, setSavedVideoIds] = useState<Set<string>>(new Set());
+  const [savedVideos, setSavedVideos] = useState<VideoResult[]>([]);
+  const [activeVideo, setActiveVideo] = useState<VideoResult | null>(null);
   const [state, setState] = useState<SearchState>({
     channelMeta: null,
     videos: [],
@@ -49,12 +52,29 @@ function HomePage() {
     currentFormValues: null,
   });
 
-  // Load saved video IDs on mount for bookmark state
+  // Load saved video IDs on mount for bookmark state; also keep full list for player side-panel
   useEffect(() => {
+    type DbRow = {
+      video_id: string; title: string; channel_id: string; channel_name: string;
+      channel_logo: string; thumbnail: string; published_at: string;
+      views: number | null; likes: number | null;
+    };
     fetch('/api/videos')
       .then((r) => r.json())
-      .then((rows: { video_id: string }[]) => {
+      .then((rows: DbRow[]) => {
         setSavedVideoIds(new Set(rows.map((r) => r.video_id)));
+        setSavedVideos(rows.map((r) => ({
+          videoId:     r.video_id,
+          title:       r.title ?? 'Untitled Video',
+          channelId:   r.channel_id ?? '',
+          channelName: r.channel_name ?? '',
+          channelLogo: r.channel_logo ?? '',
+          thumbnail:   r.thumbnail ?? '',
+          publishedAt: r.published_at ?? '',
+          views:       r.views != null ? Number(r.views) : null,
+          likes:       r.likes != null ? Number(r.likes) : null,
+          duration:    null,
+        })));
       })
       .catch(() => {});
   }, []);
@@ -286,6 +306,7 @@ function HomePage() {
                   isSaved={savedVideoIds.has(video.videoId)}
                   onSave={handleSave}
                   onUnsave={handleUnsave}
+                  onPlay={setActiveVideo}
                 />
               </div>
             ))}
@@ -314,6 +335,15 @@ function HomePage() {
           <HeroIcon />
           <p>Enter a channel and a keyword above to search their video history</p>
         </div>
+      )}
+
+      {/* In-app video player overlay */}
+      {activeVideo && (
+        <VideoPlayer
+          videoId={activeVideo.videoId}
+          savedVideos={savedVideos}
+          onClose={() => setActiveVideo(null)}
+        />
       )}
 
       <style jsx>{`

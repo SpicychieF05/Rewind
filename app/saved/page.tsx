@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import type { Metadata } from 'next';
 import SavedTabs, { type SavedTab } from '@/components/SavedTabs';
 import ChannelBadge from '@/components/ChannelBadge';
 import VideoCard from '@/components/VideoCard';
+import VideoPlayer from '@/components/VideoPlayer';
 import PlaylistView from '@/components/PlaylistView';
 import type { VideoResult } from '@/lib/youtube';
 
@@ -196,6 +196,7 @@ function SavedPageContent() {
   const [loading, setLoading] = useState(true);
 
   const [playlistPicker, setPlaylistPicker] = useState<VideoResult | null>(null);
+  const [activeVideo, setActiveVideo] = useState<VideoResult | null>(null);
 
   useEffect(() => {
     setSearchQuery(urlQuery);
@@ -409,6 +410,7 @@ function SavedPageContent() {
                         onUnsave={handleUnsaveVideo}
                         onAddToPlaylist={(video) => setPlaylistPicker(video)}
                         showAddToPlaylist={true}
+                        onPlay={setActiveVideo}
                       />
                     </div>
                   ))}
@@ -425,7 +427,7 @@ function SavedPageContent() {
               aria-labelledby="tab-playlists"
               style={{ paddingTop: 'var(--space-5)' }}
             >
-              <PlaylistView playlists={filteredPlaylists} onRefresh={loadAll} />
+              <PlaylistView playlists={filteredPlaylists} onRefresh={loadAll} onPlay={setActiveVideo} />
             </div>
           )}
         </>
@@ -438,6 +440,15 @@ function SavedPageContent() {
           playlists={playlists}
           onAdd={() => loadAll()}
           onClose={() => setPlaylistPicker(null)}
+        />
+      )}
+
+      {/* In-app video player overlay */}
+      {activeVideo && (
+        <VideoPlayer
+          videoId={activeVideo.videoId}
+          savedVideos={videos}
+          onClose={() => setActiveVideo(null)}
         />
       )}
 
