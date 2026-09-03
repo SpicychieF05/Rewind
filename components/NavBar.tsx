@@ -4,10 +4,13 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useRef, useEffect } from 'react';
 import type { VideoResult } from '@/lib/youtube';
+import { authClient } from '@/lib/auth/client';
 
 export default function NavBar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { data: session, isPending: isAuthPending } = authClient.useSession();
+
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [navQuery, setNavQuery] = useState('');
@@ -50,6 +53,14 @@ export default function NavBar() {
       return;
     }
 
+    // If user is not signed in, do not query /api/videos (which requires session)
+    if (!session?.user) {
+      setResults([]);
+      setIsSearching(false);
+      setHasSearched(true);
+      return;
+    }
+
     setIsSearching(true);
     const timer = setTimeout(async () => {
       try {
@@ -69,7 +80,7 @@ export default function NavBar() {
     }, 200);
 
     return () => clearTimeout(timer);
-  }, [navQuery]);
+  }, [navQuery, session]);
 
   const handleNavSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,6 +104,36 @@ export default function NavBar() {
   };
 
   const renderDropdownContent = () => {
+    if (!session?.user) {
+      return (
+        <div className="nav-dropdown-empty" role="status">
+          <div className="empty-icon-wrap">
+            <BookmarkIcon />
+          </div>
+          <p className="empty-title">Sign in to search saved videos</p>
+          <p className="empty-desc">
+            Your saved library and playlists are private to your account. Sign in to view and search your saved videos.
+          </p>
+          <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-2)', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Link
+              href="/auth/sign-in"
+              className="btn btn-primary btn-sm empty-action-btn"
+              onClick={() => { setDropdownOpen(false); setSearchOpen(false); }}
+            >
+              Sign In
+            </Link>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm empty-action-btn"
+              onClick={handleGoToChannelSearch}
+            >
+              Search Channel on Home
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     if (isSearching) {
       return (
         <div className="nav-dropdown-loading">
@@ -322,6 +363,51 @@ export default function NavBar() {
               <span>Saved</span>
             </Link>
 
+            {/* Auth Session Controls */}
+            {isAuthPending ? (
+              <div className="navbar-auth-skeleton" aria-hidden="true" />
+            ) : !session?.user ? (
+              <Link
+                href="/auth/sign-in"
+                id="nav-signin-btn"
+                className="btn btn-primary navbar-signin-btn"
+              >
+                Sign In
+              </Link>
+            ) : (
+              <div className="navbar-user-menu">
+                <div
+                  className="navbar-user-avatar"
+                  title={session.user.name || session.user.email || 'Account'}
+                >
+                  {session.user.image ? (
+                    <img
+                      src={session.user.image}
+                      alt={session.user.name || 'User avatar'}
+                      className="navbar-avatar-img"
+                      width={32}
+                      height={32}
+                    />
+                  ) : (
+                    <span>{((session.user.name || session.user.email || 'U')[0]).toUpperCase()}</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  id="nav-signout-btn"
+                  className="btn btn-ghost navbar-signout-btn"
+                  onClick={async () => {
+                    await authClient.signOut();
+                    router.refresh();
+                  }}
+                  title="Sign out"
+                  aria-label="Sign out"
+                >
+                  Sign Out
+                </button>
+              </div>
+            )}
+
             {/* Mobile menu toggle */}
             <button
               id="nav-menu-toggle"
@@ -334,6 +420,57 @@ export default function NavBar() {
             </button>
           </div>
         </div>
+
+        {/* Mobile menu drawer */}
+        {mobileMenuOpen && (
+          <div className="navbar-mobile-drawer" role="dialog" aria-label="Mobile navigation menu">
+            <Link
+              href="/saved"
+              className={`navbar-mobile-link ${pathname === '/saved' ? 'active' : ''}`}
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <BookmarkIcon />
+              <span>Saved Library</span>
+            </Link>
+            <div className="navbar-mobile-auth">
+              {isAuthPending ? (
+                <div className="navbar-auth-skeleton w-full" />
+              ) : !session?.user ? (
+                <Link
+                  href="/auth/sign-in"
+                  className="btn btn-primary w-full"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Sign In / Sign Up
+                </Link>
+              ) : (
+                <div className="navbar-mobile-user">
+                  <div className="navbar-mobile-user-info">
+                    <div className="navbar-user-avatar">
+                      {session.user.image ? (
+                        <img src={session.user.image} alt={session.user.name || 'Avatar'} className="navbar-avatar-img" />
+                      ) : (
+                        <span>{((session.user.name || session.user.email || 'U')[0]).toUpperCase()}</span>
+                      )}
+                    </div>
+                    <span className="navbar-mobile-user-name">{session.user.name || session.user.email}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary w-full"
+                    onClick={async () => {
+                      setMobileMenuOpen(false);
+                      await authClient.signOut();
+                      router.refresh();
+                    }}
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Mobile: expanded search row */}
         {searchOpen && (
@@ -685,11 +822,118 @@ export default function NavBar() {
           border-top: 1px solid var(--border-subtle);
         }
 
+        .navbar-auth-skeleton {
+          width: 76px;
+          height: 36px;
+          border-radius: var(--radius-md);
+          background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary) 50%, var(--bg-secondary) 75%);
+          background-size: 200% 100%;
+          animation: navShimmer 1.4s infinite;
+        }
+        @keyframes navShimmer { to { background-position: -200% 0; } }
+
+        .navbar-signin-btn {
+          font-size: var(--text-sm);
+          padding: var(--space-2) var(--space-4);
+          border-radius: var(--radius-md);
+          white-space: nowrap;
+        }
+
+        .navbar-user-menu {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+        }
+
+        .navbar-user-avatar {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background-color: var(--accent);
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          font-size: var(--text-sm);
+          overflow: hidden;
+          flex-shrink: 0;
+          user-select: none;
+        }
+
+        .navbar-avatar-img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: 50%;
+        }
+
+        .navbar-signout-btn {
+          font-size: var(--text-xs);
+          padding: var(--space-2) var(--space-3);
+          color: var(--text-secondary);
+        }
+        .navbar-signout-btn:hover {
+          color: var(--text-primary);
+        }
+
+        .navbar-mobile-drawer {
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-3);
+          padding: var(--space-4);
+          background-color: var(--bg-secondary);
+          border-bottom: 1px solid var(--border);
+        }
+
+        .navbar-mobile-link {
+          display: flex;
+          align-items: center;
+          gap: var(--space-3);
+          padding: var(--space-3);
+          border-radius: var(--radius-md);
+          color: var(--text-primary);
+          font-size: var(--text-sm);
+          font-weight: 500;
+        }
+        .navbar-mobile-link.active {
+          background-color: var(--bg-tertiary);
+        }
+
+        .navbar-mobile-auth {
+          padding-top: var(--space-2);
+          border-top: 1px solid var(--border-subtle);
+        }
+
+        .navbar-mobile-user {
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-3);
+        }
+
+        .navbar-mobile-user-info {
+          display: flex;
+          align-items: center;
+          gap: var(--space-3);
+        }
+
+        .navbar-mobile-user-name {
+          font-size: var(--text-sm);
+          color: var(--text-primary);
+          font-weight: 500;
+        }
+
         @media (max-width: 640px) {
           .navbar {
             height: auto;
           }
           .navbar-search-container {
+            display: none;
+          }
+          .navbar-saved-btn {
+            display: none;
+          }
+          .navbar-signin-btn, .navbar-user-menu {
             display: none;
           }
           .navbar-mobile-search { display: flex; }

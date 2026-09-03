@@ -6,6 +6,8 @@ import type { VideoResult } from '@/lib/youtube';
 interface Props {
   video: VideoResult;
   isSaved?: boolean;
+  isAuthenticated?: boolean;
+  onPromptSignIn?: () => void;
   onSave?: (video: VideoResult) => Promise<void>;
   onUnsave?: (videoId: string) => Promise<void>;
   onAddToPlaylist?: (video: VideoResult) => void;
@@ -17,6 +19,8 @@ interface Props {
 export default function VideoCard({
   video,
   isSaved = false,
+  isAuthenticated = true,
+  onPromptSignIn,
   onSave,
   onUnsave,
   onAddToPlaylist,
@@ -31,6 +35,10 @@ export default function VideoCard({
   const handleSaveToggle = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!isAuthenticated) {
+      onPromptSignIn?.();
+      return;
+    }
     if (savingState === 'loading') return;
     setSavingState('loading');
     try {
@@ -44,6 +52,16 @@ export default function VideoCard({
     } finally {
       setSavingState('idle');
     }
+  };
+
+  const handleAddToPlaylistClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isAuthenticated) {
+      onPromptSignIn?.();
+      return;
+    }
+    onAddToPlaylist?.(video);
   };
 
   const handlePlay = (e: React.MouseEvent) => {
@@ -156,7 +174,7 @@ export default function VideoCard({
             <button
               id={`playlist-btn-${video.videoId}`}
               className="btn-icon"
-              onClick={() => onAddToPlaylist?.(video)}
+              onClick={handleAddToPlaylistClick}
               aria-label={`Add "${video.title}" to playlist`}
               title="Add to playlist"
             >

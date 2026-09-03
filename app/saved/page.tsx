@@ -227,6 +227,10 @@ function SavedPageContent() {
         fetch('/api/videos'),
         fetch('/api/playlists'),
       ]);
+      if (chRes.status === 401 || vidRes.status === 401 || plRes.status === 401) {
+        router.push('/auth/sign-in');
+        return;
+      }
       const [ch, vids, pls] = await Promise.all([chRes.json(), vidRes.json(), plRes.json()]);
       setChannels(Array.isArray(ch) ? ch : []);
       setVideos(Array.isArray(vids) ? vids.map(normalizeVideo) : []);
@@ -236,7 +240,7 @@ function SavedPageContent() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 

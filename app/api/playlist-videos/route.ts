@@ -1,9 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { auth } from '@/lib/auth/server';
 
 export async function GET(req: NextRequest) {
+  const sessionRes = await auth.getSession();
+  const session = (sessionRes as { data?: { user?: { id: string } } | null })?.data ?? (sessionRes as { user?: { id: string } });
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const userId = session.user.id;
+
   const playlistId = req.nextUrl.searchParams.get('playlistId');
   if (!playlistId) return NextResponse.json({ error: 'Missing playlistId' }, { status: 400 });
+
+  // Ownership pre-check
+  const plCheck = await sql`
+    SELECT 1 FROM playlists WHERE playlist_id = ${playlistId} AND user_id = ${userId}
+  `;
+  if (plCheck.length === 0) {
+    return NextResponse.json({ error: 'Playlist not found' }, { status: 404 });
+  }
 
   const rows = await sql`
     SELECT
@@ -18,7 +34,7 @@ export async function GET(req: NextRequest) {
       sv.likes,
       pv.position
     FROM playlist_videos pv
-    JOIN saved_videos sv ON sv.video_id = pv.video_id
+    JOIN saved_videos sv ON sv.video_id = pv.video_id AND sv.user_id = ${userId}
     WHERE pv.playlist_id = ${playlistId}
     ORDER BY pv.position ASC
   `;
@@ -26,9 +42,24 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const sessionRes = await auth.getSession();
+  const session = (sessionRes as { data?: { user?: { id: string } } | null })?.data ?? (sessionRes as { user?: { id: string } });
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const userId = session.user.id;
+
   const { playlistId, videoId } = await req.json();
   if (!playlistId || !videoId) {
     return NextResponse.json({ error: 'playlistId and videoId are required' }, { status: 400 });
+  }
+
+  // Explicit ownership pre-check
+  const plCheck = await sql`
+    SELECT 1 FROM playlists WHERE playlist_id = ${playlistId} AND user_id = ${userId}
+  `;
+  if (plCheck.length === 0) {
+    return NextResponse.json({ error: 'Forbidden: playlist does not belong to user' }, { status: 403 });
   }
 
   // Assign next position
@@ -48,10 +79,25 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const sessionRes = await auth.getSession();
+  const session = (sessionRes as { data?: { user?: { id: string } } | null })?.data ?? (sessionRes as { user?: { id: string } });
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const userId = session.user.id;
+
   const playlistId = req.nextUrl.searchParams.get('playlistId');
   const videoId    = req.nextUrl.searchParams.get('videoId');
   if (!playlistId || !videoId) {
     return NextResponse.json({ error: 'playlistId and videoId are required' }, { status: 400 });
+  }
+
+  // Explicit ownership pre-check
+  const plCheck = await sql`
+    SELECT 1 FROM playlists WHERE playlist_id = ${playlistId} AND user_id = ${userId}
+  `;
+  if (plCheck.length === 0) {
+    return NextResponse.json({ error: 'Forbidden: playlist does not belong to user' }, { status: 403 });
   }
 
   await sql`

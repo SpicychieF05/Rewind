@@ -56,11 +56,12 @@ Single primary persona: **the builder/owner themselves**, someone who follows sp
 ### 5.1 Channel Search
 
 **Input fields (all on homepage):**
-| Field | Details |
-|---|---|
-| Channel | Accepts channel URL, `@handle`, or raw channel ID. Must resolve to a valid `channelId`. |
+
+| Field                 | Details                                                                                                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Channel               | Accepts channel URL, `@handle`, or raw channel ID. Must resolve to a valid `channelId`.                                                                                                                      |
 | Video title / keyword | Free text. Two match modes: **Exact match** (title must contain the exact phrase) and **Contains words** (title contains any/all of the given words — YouTube relevance search, refined by local filtering). |
-| Timeline | Preset dropdown: Last 1 / 2 / 3 / 6 / 12 months, or Last 1 / 2 / 3 / 4 / 5 years. Maps to `publishedAfter` (and optionally `publishedBefore`). |
+| Timeline              | Preset dropdown: Last 1 / 2 / 3 / 6 / 12 months, or Last 1 / 2 / 3 / 4 / 5 years. Maps to `publishedAfter` (and optionally `publishedBefore`).                                                               |
 
 **Behavior:**
 

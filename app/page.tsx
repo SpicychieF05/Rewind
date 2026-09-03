@@ -7,7 +7,9 @@ import VideoCard from '@/components/VideoCard';
 import VideoPlayer from '@/components/VideoPlayer';
 import QuotaBanner from '@/components/QuotaBanner';
 import LoadMoreButton from '@/components/LoadMoreButton';
+import SignInPromptModal from '@/components/SignInPromptModal';
 import type { VideoResult } from '@/lib/youtube';
+import { authClient } from '@/lib/auth/client';
 
 interface ChannelMeta {
   channelId: string;
@@ -35,6 +37,10 @@ function HomePage() {
   const router = useRouter();
   const initialQuery = searchParams.get('q') ?? '';
 
+  const { data: session } = authClient.useSession();
+  const isAuthenticated = !!session?.user;
+  const [signInPromptOpen, setSignInPromptOpen] = useState(false);
+
   const [savedVideoIds, setSavedVideoIds] = useState<Set<string>>(new Set());
   const [savedVideos, setSavedVideos] = useState<VideoResult[]>([]);
   const [activeVideo, setActiveVideo] = useState<VideoResult | null>(null);
@@ -52,16 +58,26 @@ function HomePage() {
     currentFormValues: null,
   });
 
-  // Load saved video IDs on mount for bookmark state; also keep full list for player side-panel
+  // Load saved video IDs for authenticated user; keep empty for unauthenticated visitors
   useEffect(() => {
+    if (!isAuthenticated) {
+      setSavedVideoIds(new Set());
+      setSavedVideos([]);
+      return;
+    }
+
     type DbRow = {
       video_id: string; title: string; channel_id: string; channel_name: string;
       channel_logo: string; thumbnail: string; published_at: string;
       views: number | null; likes: number | null;
     };
     fetch('/api/videos')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) return [];
+        return r.json();
+      })
       .then((rows: DbRow[]) => {
+        if (!Array.isArray(rows)) return;
         setSavedVideoIds(new Set(rows.map((r) => r.video_id)));
         setSavedVideos(rows.map((r) => ({
           videoId:     r.video_id,
@@ -77,7 +93,7 @@ function HomePage() {
         })));
       })
       .catch(() => {});
-  }, []);
+  }, [isAuthenticated]);
 
   // ── Core search ──────────────────────────────────────────────────────────
 
@@ -191,6 +207,10 @@ function HomePage() {
   // ── Save/unsave ───────────────────────────────────────────────────────────
 
   const handleSave = async (video: VideoResult) => {
+    if (!isAuthenticated) {
+      setSignInPromptOpen(true);
+      return;
+    }
     await fetch('/api/videos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -200,6 +220,10 @@ function HomePage() {
   };
 
   const handleUnsave = async (videoId: string) => {
+    if (!isAuthenticated) {
+      setSignInPromptOpen(true);
+      return;
+    }
     await fetch(`/api/videos?videoId=${videoId}`, { method: 'DELETE' });
     setSavedVideoIds((prev) => {
       const next = new Set(prev);
@@ -304,6 +328,8 @@ function HomePage() {
                 <VideoCard
                   video={video}
                   isSaved={savedVideoIds.has(video.videoId)}
+                  isAuthenticated={isAuthenticated}
+                  onPromptSignIn={() => setSignInPromptOpen(true)}
                   onSave={handleSave}
                   onUnsave={handleUnsave}
                   onPlay={setActiveVideo}
@@ -345,6 +371,12 @@ function HomePage() {
           onClose={() => setActiveVideo(null)}
         />
       )}
+
+      {/* Sign-in prompt modal */}
+      <SignInPromptModal
+        isOpen={signInPromptOpen}
+        onClose={() => setSignInPromptOpen(false)}
+      />
 
       <style jsx>{`
         .channel-header {

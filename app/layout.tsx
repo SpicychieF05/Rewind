@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
+import '@neondatabase/auth-ui/css';
 import './globals.css';
 import NavBar from '@/components/NavBar';
+import { Providers } from './providers';
 
 export const metadata: Metadata = {
   title: 'Rewind — YouTube Channel Search & Saved Library',
@@ -29,10 +31,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body suppressHydrationWarning>
-        <NavBar />
-        <main className="main-content" id="main-content">
-          {children}
-        </main>
+        <Providers>
+          <NavBar />
+          <main className="main-content" id="main-content">
+            {children}
+          </main>
+        </Providers>
       </body>
     </html>
   );

@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { auth } from '@/lib/auth/server';
 
 export async function PATCH(req: NextRequest) {
+  const sessionRes = await auth.getSession();
+  const session = (sessionRes as { data?: { user?: { id: string } } | null })?.data ?? (sessionRes as { user?: { id: string } });
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const userId = session.user.id;
+
   const { playlistId, orderedVideoIds } = await req.json() as {
     playlistId: string;
     orderedVideoIds: string[];
@@ -12,6 +20,14 @@ export async function PATCH(req: NextRequest) {
       { error: 'playlistId and orderedVideoIds[] are required' },
       { status: 400 }
     );
+  }
+
+  // Explicit ownership pre-check
+  const plCheck = await sql`
+    SELECT 1 FROM playlists WHERE playlist_id = ${playlistId} AND user_id = ${userId}
+  `;
+  if (plCheck.length === 0) {
+    return NextResponse.json({ error: 'Forbidden: playlist does not belong to user' }, { status: 403 });
   }
 
   const caseLines = orderedVideoIds

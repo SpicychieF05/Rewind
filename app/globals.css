@@ -446,3 +446,18 @@ ul, ol {
 .mb-4 { margin-bottom: var(--space-4); }
 .p-4 { padding: var(--space-4); }
 .rounded-full { border-radius: var(--radius-full); }
+
+/* Auth Views */
+.auth-page-wrapper {
+  min-height: calc(100vh - var(--nav-height) - 80px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6) var(--space-4);
+}
+
+.auth-card-wrap {
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+}
