@@ -54,20 +54,22 @@ const styles = `
     align-items: center;
     gap: var(--space-3);
     padding: var(--space-6) 0 var(--space-8);
+    width: 100%;
   }
   .load-more-btn {
-    min-width: 200px;
+    width: min(100%, 280px);
+    min-height: 44px;
     justify-content: center;
+    padding: var(--space-3) var(--space-6);
+    font-size: var(--text-sm);
+    font-weight: 500;
   }
   .load-more-btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .load-more-warning {
     font-size: var(--text-sm);
     color: var(--warning);
     text-align: center;
-    max-width: 500px;
-  }
-
-  @media (max-width: 640px) {
-    .load-more-btn { width: 100%; }
+    max-width: min(100%, 500px);
+    padding: 0 var(--space-3);
   }
 `;

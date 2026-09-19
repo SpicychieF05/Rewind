@@ -22,21 +22,12 @@ function formatDate(iso: string): string {
 export default function PlaylistOrderModal({ playlistName, videos, onSave, onClose, onPlay }: Props) {
   const [items, setItems] = useState<PlaylistVideo[]>([...videos].sort((a, b) => a.position - b.position));
   const [saving, setSaving] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
 
   // Drag state
   const dragIndex = useRef<number | null>(null);
   const dragOverIndex = useRef<number | null>(null);
 
-  // Detect mobile
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 640);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
-
-  // ── Desktop: drag handlers ────────────────────────────────────────────────
+  // ── Drag handlers ─────────────────────────────────────────────────────────
 
   const handleDragStart = (index: number) => {
     dragIndex.current = index;
@@ -62,7 +53,7 @@ export default function PlaylistOrderModal({ playlistName, videos, onSave, onClo
     dragOverIndex.current = null;
   }, []);
 
-  // ── Mobile: arrow handlers ─────────────────────────────────────────────────
+  // ── Arrow handlers (Touch & Keyboard friendly) ─────────────────────────────
 
   const moveUp = (index: number) => {
     if (index === 0) return;
@@ -126,9 +117,7 @@ export default function PlaylistOrderModal({ playlistName, videos, onSave, onClo
         </div>
 
         <p className="order-hint">
-          {isMobile
-            ? 'Use the arrow buttons to reorder.'
-            : 'Drag and drop rows to reorder.'}
+          Drag and drop rows or use the arrow buttons to reorder videos.
         </p>
 
         <ul className="order-list" role="list" aria-label="Playlist video order">
@@ -137,7 +126,7 @@ export default function PlaylistOrderModal({ playlistName, videos, onSave, onClo
               key={video.videoId}
               id={`order-item-${video.videoId}`}
               className="order-item"
-              draggable={!isMobile}
+              draggable={true}
               onDragStart={() => handleDragStart(index)}
               onDragOver={(e) => handleDragOver(e, index)}
               onDrop={handleDrop}
@@ -172,39 +161,44 @@ export default function PlaylistOrderModal({ playlistName, videos, onSave, onClo
                 )}
               </a>
 
-              {/* Title */}
-              <span className="order-title line-clamp-2">{video.title}</span>
-              <span className="order-date text-xs text-muted">
-                {video.publishedAt ? formatDate(video.publishedAt) : ''}
-              </span>
+              {/* Title & Date */}
+              <div className="order-info">
+                <span className="order-title line-clamp-2">{video.title}</span>
+                <span className="order-date text-xs text-muted">
+                  {video.publishedAt ? formatDate(video.publishedAt) : ''}
+                </span>
+              </div>
 
-              {/* Desktop: drag handle / Mobile: arrow buttons */}
-              {isMobile ? (
+              {/* Reorder controls: Drag handle + Accessible Arrows */}
+              <div className="order-controls">
                 <div className="order-arrows" role="group" aria-label={`Move ${video.title}`}>
                   <button
                     id={`move-up-${video.videoId}`}
+                    type="button"
                     className="btn-icon order-arrow-btn"
                     onClick={() => moveUp(index)}
                     disabled={index === 0}
                     aria-label={`Move ${video.title} up`}
+                    title="Move up"
                   >
                     <ChevronUpIcon />
                   </button>
                   <button
                     id={`move-down-${video.videoId}`}
+                    type="button"
                     className="btn-icon order-arrow-btn"
                     onClick={() => moveDown(index)}
                     disabled={index === items.length - 1}
                     aria-label={`Move ${video.title} down`}
+                    title="Move down"
                   >
                     <ChevronDownIcon />
                   </button>
                 </div>
-              ) : (
                 <div className="drag-handle" aria-hidden="true" title="Drag to reorder">
                   <GripIcon />
                 </div>
-              )}
+              </div>
             </li>
           ))}
         </ul>
@@ -231,20 +225,30 @@ export default function PlaylistOrderModal({ playlistName, videos, onSave, onClo
       </div>
 
       <style jsx>{`
-        .order-modal { max-width: 640px; }
+        .order-modal {
+          max-width: 640px;
+          max-height: min(90dvh, 740px);
+          display: flex;
+          flex-direction: column;
+        }
         .modal-title { font-size: var(--text-lg); font-weight: 700; }
         .modal-title em { font-style: normal; color: var(--text-secondary); font-weight: 400; }
         .order-hint {
-          padding: 0 var(--space-5) var(--space-3);
+          padding: 0 var(--space-4) var(--space-3);
           font-size: var(--text-xs);
           color: var(--text-muted);
         }
-        .order-list { list-style: none; }
+        .order-list {
+          list-style: none;
+          flex: 1;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+        }
         .order-item {
           display: flex;
           align-items: center;
           gap: var(--space-3);
-          padding: var(--space-2) var(--space-5);
+          padding: var(--space-2) var(--space-4);
           border-top: 1px solid var(--border-subtle);
           cursor: grab;
           transition: background-color var(--transition-fast);
@@ -255,37 +259,57 @@ export default function PlaylistOrderModal({ playlistName, videos, onSave, onClo
           font-size: var(--text-sm);
           font-weight: 700;
           color: var(--text-muted);
-          min-width: 24px;
+          min-width: 20px;
           text-align: center;
           flex-shrink: 0;
         }
         .order-thumb-link { flex-shrink: 0; display: block; }
         .order-thumb {
-          width: 80px;
-          height: 45px;
+          width: 72px;
+          height: 40px;
           object-fit: cover;
           border-radius: var(--radius-sm);
           background-color: var(--bg-primary);
         }
         .order-thumb-placeholder {
-          width: 80px;
-          height: 45px;
+          width: 72px;
+          height: 40px;
           border-radius: var(--radius-sm);
           background-color: var(--bg-secondary);
         }
-        .order-title {
+        .order-info {
           flex: 1;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .order-title {
           font-size: var(--text-sm);
           color: var(--text-primary);
-          min-width: 0;
-          line-height: 1.4;
+          line-height: 1.35;
+          word-break: break-word;
         }
-        .order-date { flex-shrink: 0; }
-        .drag-handle {
+        .order-date {
+          font-size: var(--text-xs);
+          color: var(--text-muted);
+        }
+        .order-controls {
+          display: flex;
+          align-items: center;
+          gap: var(--space-1);
           flex-shrink: 0;
+        }
+        .drag-handle {
           color: var(--text-muted);
           cursor: grab;
           padding: var(--space-1);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .drag-handle:hover {
+          color: var(--text-primary);
         }
         .order-arrows {
           display: flex;
@@ -294,11 +318,18 @@ export default function PlaylistOrderModal({ playlistName, videos, onSave, onClo
           flex-shrink: 0;
         }
         .order-arrow-btn {
-          width: 28px;
-          height: 28px;
+          width: 32px;
+          height: 32px;
           color: var(--text-secondary);
         }
-        .order-arrow-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+        .order-arrow-btn:disabled { opacity: 0.2; cursor: not-allowed; }
+
+        @media (pointer: coarse) {
+          .order-arrow-btn {
+            width: 36px;
+            height: 36px;
+          }
+        }
       `}</style>
     </div>
   );

@@ -71,6 +71,7 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
   const [mode, setMode] = useState<ViewMode>('normal');
   const [apiReady, setApiReady] = useState(false);
   const [currentVideoId, setCurrentVideoId] = useState(videoId);
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const playerDivRef = useRef<HTMLDivElement>(null);
@@ -268,50 +269,66 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
 
           {/* ── Saved Videos side panel (Normal mode only) ── */}
           {showPanel && (
-            <aside
-              id="player-saved-panel"
-              className="player-saved-panel"
-              aria-label="Saved videos"
-            >
-              <h2 className="panel-heading">Saved Videos</h2>
-              <ul className="panel-list" role="list">
-                {savedVideos.map((v) => (
-                  <li key={v.videoId}>
-                    <button
-                      id={`panel-video-${v.videoId}`}
-                      className={`panel-item ${v.videoId === currentVideoId ? 'panel-item-active' : ''}`}
-                      onClick={() => handleSwap(v)}
-                      aria-label={`Play ${v.title}`}
-                      aria-current={v.videoId === currentVideoId ? 'true' : undefined}
-                    >
-                      <div className="panel-thumb-wrap">
-                        {v.thumbnail ? (
-                          <img
-                            src={v.thumbnail}
-                            alt={v.title}
-                            className="panel-thumb"
-                            width={100}
-                            height={56}
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="panel-thumb-placeholder" aria-hidden="true">
-                            <PanelPlayIcon />
-                          </div>
-                        )}
-                        {v.videoId === currentVideoId && (
-                          <div className="panel-now-playing" aria-hidden="true">▶</div>
-                        )}
-                      </div>
-                      <div className="panel-info">
-                        <span className="panel-title line-clamp-2">{v.title}</span>
-                        <span className="panel-channel">{v.channelName || 'YouTube Channel'}</span>
-                      </div>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </aside>
+            <>
+              {/* Mobile toggle button */}
+              <button
+                type="button"
+                className="player-mobile-panel-toggle"
+                onClick={() => setMobilePanelOpen((v) => !v)}
+                aria-expanded={mobilePanelOpen}
+                aria-controls="player-saved-panel"
+              >
+                <span>Saved Videos ({savedVideos.length})</span>
+                <span className={`toggle-chevron ${mobilePanelOpen ? 'open' : ''}`}>
+                  <ChevronDownIconSmall />
+                </span>
+              </button>
+
+              <aside
+                id="player-saved-panel"
+                className={`player-saved-panel ${mobilePanelOpen ? 'mobile-open' : ''}`}
+                aria-label="Saved videos"
+              >
+                <h2 className="panel-heading">Saved Videos</h2>
+                <ul className="panel-list" role="list">
+                  {savedVideos.map((v) => (
+                    <li key={v.videoId}>
+                      <button
+                        id={`panel-video-${v.videoId}`}
+                        className={`panel-item ${v.videoId === currentVideoId ? 'panel-item-active' : ''}`}
+                        onClick={() => handleSwap(v)}
+                        aria-label={`Play ${v.title}`}
+                        aria-current={v.videoId === currentVideoId ? 'true' : undefined}
+                      >
+                        <div className="panel-thumb-wrap">
+                          {v.thumbnail ? (
+                            <img
+                              src={v.thumbnail}
+                              alt={v.title}
+                              className="panel-thumb"
+                              width={100}
+                              height={56}
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="panel-thumb-placeholder" aria-hidden="true">
+                              <PanelPlayIcon />
+                            </div>
+                          )}
+                          {v.videoId === currentVideoId && (
+                            <div className="panel-now-playing" aria-hidden="true">▶</div>
+                          )}
+                        </div>
+                        <div className="panel-info">
+                          <span className="panel-title line-clamp-2">{v.title}</span>
+                          <span className="panel-channel">{v.channelName || 'YouTube Channel'}</span>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </aside>
+            </>
           )}
         </div>
       </div>
@@ -326,9 +343,13 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           flex-direction: column;
           align-items: center;
           justify-content: flex-start;
-          padding-top: var(--nav-height);
+          padding-top: max(var(--nav-height), var(--safe-top));
+          padding-bottom: max(var(--space-2), var(--safe-bottom));
+          padding-left: max(var(--space-2), var(--safe-left));
+          padding-right: max(var(--space-2), var(--safe-right));
           background-color: var(--bg-primary);
           overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
         }
 
         /* Theater: full-black, no scroll — mirrors YouTube theater mode */
@@ -341,7 +362,7 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
         .player-shell {
           width: 100%;
           max-width: var(--content-max-width);
-          padding: var(--space-3) var(--space-4) var(--space-8);
+          padding: var(--space-2) var(--space-4) var(--space-6);
           display: flex;
           flex-direction: column;
           gap: var(--space-2);
@@ -353,7 +374,7 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           z-index: 1;
           background-color: var(--bg-primary);
           border-radius: var(--radius-lg);
-          padding: var(--space-3) var(--space-6) var(--space-6);
+          padding: var(--space-2) var(--space-4) var(--space-4);
           box-shadow: 0 0 0 1px var(--border-subtle), var(--shadow-lg);
         }
 
@@ -382,8 +403,8 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          width: 36px;
-          height: 36px;
+          width: 38px;
+          height: 38px;
           border-radius: var(--radius-full);
           background: transparent;
           color: var(--text-secondary);
@@ -433,7 +454,6 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           width: 100%;
           height: 100%;
         }
-        /* The actual iframe injected by YT API */
         .player-iframe-target iframe {
           width: 100%;
           height: 100%;
@@ -471,7 +491,7 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
 
         /* Theater: shell fills viewport height, no padding overflow */
         .theater .player-shell {
-          height: calc(100vh - var(--nav-height));
+          height: calc(100dvh - var(--nav-height));
           max-width: 100%;
           padding: var(--space-2) var(--space-4) 0;
           overflow: hidden;
@@ -492,18 +512,21 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
         /* Theater: max-height drives sizing, aspect-ratio adjusts width proportionally */
         .theater .player-iframe-wrap {
           width: 100%;
-          max-height: calc(100vh - var(--nav-height) - 54px); /* 54px = topbar row + gap */
+          max-height: calc(100dvh - var(--nav-height) - 48px);
           border-radius: 0;
         }
 
         /* ── Saved Videos panel ── */
+        .player-mobile-panel-toggle {
+          display: none;
+        }
         .player-saved-panel {
           width: 340px;
           flex-shrink: 0;
           display: flex;
           flex-direction: column;
           gap: var(--space-2);
-          max-height: calc(100vh - var(--nav-height) - 80px);
+          max-height: calc(100dvh - var(--nav-height) - 60px);
           overflow-y: auto;
           scrollbar-width: thin;
           scrollbar-color: var(--border) transparent;
@@ -593,22 +616,99 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           color: var(--text-muted);
         }
 
-        /* ── Mobile responsive ── */
+        /* ── Tablet / Intermediate ── */
         @media (max-width: 900px) {
           .player-saved-panel {
             width: 260px;
           }
         }
-        @media (max-width: 640px) {
+
+        /* ── Mobile & Narrow Screens (<720px) ── */
+        @media (max-width: 720px) {
           .player-content {
             flex-direction: column;
           }
-          .player-saved-panel {
+          .player-mobile-panel-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             width: 100%;
-            max-height: 320px;
+            padding: var(--space-3) var(--space-4);
+            background-color: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-size: var(--text-sm);
+            font-weight: 600;
+            margin-top: var(--space-2);
+            cursor: pointer;
+            border: 1px solid var(--border-subtle);
+          }
+          .toggle-chevron {
+            display: flex;
+            align-items: center;
+            transition: transform 0.2s ease;
+          }
+          .toggle-chevron.open {
+            transform: rotate(180deg);
+          }
+          .player-saved-panel {
+            display: none;
+            width: 100%;
+            max-height: 300px;
+            background-color: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            padding: var(--space-3);
+            margin-top: var(--space-1);
+          }
+          .player-saved-panel.mobile-open {
+            display: flex;
+          }
+          .panel-heading {
+            display: none;
           }
           .panel-thumb-wrap {
             width: 80px;
+          }
+        }
+
+        /* ── Landscape Mobile / Short Viewports ── */
+        @media (max-height: 520px) {
+          .player-overlay {
+            padding-top: max(4px, var(--safe-top));
+            padding-bottom: max(4px, var(--safe-bottom));
+          }
+          .player-shell {
+            padding: 0 var(--space-2) var(--space-2);
+            gap: 2px;
+          }
+          .player-topbar {
+            margin-bottom: 2px;
+          }
+          .player-ctrl-btn {
+            width: 32px;
+            height: 32px;
+          }
+          .player-shortcut-hint {
+            display: none;
+          }
+          .theater .player-iframe-wrap {
+            max-height: calc(100dvh - 38px);
+          }
+        }
+
+        /* ── Touch devices: hide keyboard hint & enlarge tap targets ── */
+        @media (hover: none) {
+          .player-shortcut-hint {
+            display: none;
+          }
+        }
+        @media (pointer: coarse) {
+          .player-ctrl-btn {
+            min-width: 44px;
+            min-height: 44px;
+          }
+          .player-mobile-panel-toggle {
+            min-height: 44px;
           }
         }
       `}</style>
@@ -676,3 +776,12 @@ function PanelPlayIcon() {
     </svg>
   );
 }
+
+function ChevronDownIconSmall() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+

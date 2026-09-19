@@ -339,15 +339,23 @@ export default function PlaylistView({ playlists, onRefresh, onPlay }: Props) {
           align-items: center;
           justify-content: space-between;
           margin-bottom: var(--space-4);
+          gap: var(--space-3);
+          flex-wrap: wrap;
         }
-        .section-heading { font-size: var(--text-xl); font-weight: 700; }
+        .section-heading { font-size: clamp(var(--text-lg), 3vw, var(--text-xl)); font-weight: 700; }
         .playlist-create-form {
           display: flex;
           gap: var(--space-2);
           margin-bottom: var(--space-4);
           flex-wrap: wrap;
         }
-        .playlist-create-form .input { flex: 1; min-width: 200px; }
+        .playlist-create-form .input {
+          flex: 1 1 200px;
+          min-height: 40px;
+        }
+        .playlist-create-form .btn {
+          min-height: 40px;
+        }
         .playlist-list { display: flex; flex-direction: column; gap: var(--space-2); }
         .playlist-item {
           background-color: var(--bg-secondary);
@@ -359,12 +367,13 @@ export default function PlaylistView({ playlists, onRefresh, onPlay }: Props) {
           align-items: center;
           gap: var(--space-2);
           padding: var(--space-1) var(--space-2) var(--space-1) 0;
+          flex-wrap: wrap;
         }
         .playlist-main-btn {
           display: flex;
           align-items: center;
           gap: var(--space-3);
-          flex: 1;
+          flex: 1 1 220px;
           padding: var(--space-3) var(--space-4);
           text-align: left;
           color: var(--text-primary);
@@ -372,26 +381,35 @@ export default function PlaylistView({ playlists, onRefresh, onPlay }: Props) {
           border-radius: var(--radius-md);
           transition: background-color var(--transition-fast);
           min-width: 0;
+          min-height: 44px;
         }
         .playlist-main-btn:hover { background-color: var(--bg-tertiary); }
-        .playlist-name { font-weight: 500; font-size: var(--text-base); }
-        .playlist-count { font-size: var(--text-xs); color: var(--text-muted); white-space: nowrap; }
+        .playlist-name {
+          font-weight: 500;
+          font-size: var(--text-base);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          min-width: 0;
+        }
+        .playlist-count { font-size: var(--text-xs); color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
         .playlist-actions {
           display: flex;
           align-items: center;
           gap: var(--space-1);
           flex-shrink: 0;
           padding-right: var(--space-2);
+          margin-left: auto;
         }
         .playlist-action-btn {
           border-radius: var(--radius-sm);
           padding: var(--space-1) var(--space-2);
           font-size: var(--text-xs);
-          height: 32px;
+          height: 34px;
           gap: var(--space-1);
         }
         .playlist-action-label { display: none; }
-        @media (min-width: 480px) { .playlist-action-label { display: inline; } }
+        @media (min-width: 540px) { .playlist-action-label { display: inline; } }
         .delete-btn:hover { color: var(--error); border-color: var(--error); }
         .rename-form {
           display: flex;
@@ -399,8 +417,15 @@ export default function PlaylistView({ playlists, onRefresh, onPlay }: Props) {
           gap: var(--space-2);
           flex: 1;
           flex-wrap: wrap;
+          width: 100%;
         }
-        .rename-input { min-width: 150px; height: 32px; padding: 0 var(--space-2); }
+        .rename-input {
+          flex: 1 1 140px;
+          min-width: 120px;
+          height: 36px;
+          font-size: 16px;
+          padding: 0 var(--space-2);
+        }
         .playlist-panel {
           border-top: 1px solid var(--border-subtle);
           padding: var(--space-3) var(--space-4);
@@ -412,11 +437,39 @@ export default function PlaylistView({ playlists, onRefresh, onPlay }: Props) {
           display: flex;
           align-items: center;
           gap: var(--space-3);
-          padding: var(--space-1) 0;
+          padding: var(--space-2) 0;
         }
-        .pv-num { font-size: var(--text-xs); color: var(--text-muted); font-weight: 700; min-width: 20px; }
-        .pv-thumb { border-radius: var(--radius-sm); object-fit: cover; background-color: var(--bg-primary); }
-        .pv-title { font-size: var(--text-sm); color: var(--text-primary); min-width: 0; }
+        .pv-num { font-size: var(--text-xs); color: var(--text-muted); font-weight: 700; min-width: 20px; flex-shrink: 0; }
+        .pv-thumb {
+          border-radius: var(--radius-sm);
+          object-fit: cover;
+          background-color: var(--bg-primary);
+          flex-shrink: 0;
+        }
+        .pv-title {
+          font-size: var(--text-sm);
+          color: var(--text-primary);
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        @media (pointer: coarse) {
+          .playlist-action-btn {
+            min-height: 44px;
+            min-width: 44px;
+            padding: var(--space-2);
+          }
+          .playlist-create-form .input,
+          .playlist-create-form .btn {
+            min-height: 44px;
+          }
+          .rename-input,
+          .rename-form .btn {
+            min-height: 44px;
+          }
+        }
       `}</style>
     </div>
   );

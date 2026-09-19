@@ -47,22 +47,26 @@ export default function NavBar() {
   useEffect(() => {
     const trimmed = navQuery.trim();
     if (!trimmed) {
-      setResults([]);
-      setIsSearching(false);
-      setHasSearched(false);
-      return;
+      const timer = setTimeout(() => {
+        setResults([]);
+        setIsSearching(false);
+        setHasSearched(false);
+      }, 0);
+      return () => clearTimeout(timer);
     }
 
     // If user is not signed in, do not query /api/videos (which requires session)
     if (!session?.user) {
-      setResults([]);
-      setIsSearching(false);
-      setHasSearched(true);
-      return;
+      const timer = setTimeout(() => {
+        setResults([]);
+        setIsSearching(false);
+        setHasSearched(true);
+      }, 0);
+      return () => clearTimeout(timer);
     }
 
-    setIsSearching(true);
     const timer = setTimeout(async () => {
+      setIsSearching(true);
       try {
         const res = await fetch(`/api/videos?q=${encodeURIComponent(trimmed)}`);
         if (res.ok) {
@@ -151,7 +155,7 @@ export default function NavBar() {
           </div>
           <p className="empty-title">No saved videos found</p>
           <p className="empty-desc">
-            No saved videos match <strong className="query-highlight">"{navQuery.trim()}"</strong>. Search a channel's videos on the home page first to find and save them!
+            No saved videos match <strong className="query-highlight">&ldquo;{navQuery.trim()}&rdquo;</strong>. Search a channel&apos;s videos on the home page first to find and save them!
           </p>
           <button
             type="button"
@@ -421,82 +425,156 @@ export default function NavBar() {
           </div>
         </div>
 
-        {/* Mobile menu drawer */}
+        {/* Mobile menu drawer & overlay */}
         {mobileMenuOpen && (
-          <div className="navbar-mobile-drawer" role="dialog" aria-label="Mobile navigation menu">
-            <Link
-              href="/saved"
-              className={`navbar-mobile-link ${pathname === '/saved' ? 'active' : ''}`}
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <BookmarkIcon />
-              <span>Saved Library</span>
-            </Link>
-            <div className="navbar-mobile-auth">
-              {isAuthPending ? (
-                <div className="navbar-auth-skeleton w-full" />
-              ) : !session?.user ? (
-                <Link
-                  href="/auth/sign-in"
-                  className="btn btn-primary w-full"
+          <div
+            className="navbar-mobile-backdrop"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setMobileMenuOpen(false);
+            }}
+          >
+            <div className="navbar-mobile-drawer" role="dialog" aria-modal="true" aria-label="Mobile navigation menu">
+              <div className="drawer-header">
+                <span className="drawer-title">Navigation</span>
+                <button
+                  type="button"
+                  className="btn-icon drawer-close-btn"
                   onClick={() => setMobileMenuOpen(false)}
+                  aria-label="Close menu"
                 >
-                  Sign In / Sign Up
-                </Link>
-              ) : (
-                <div className="navbar-mobile-user">
-                  <div className="navbar-mobile-user-info">
-                    <div className="navbar-user-avatar">
-                      {session.user.image ? (
-                        <img src={session.user.image} alt={session.user.name || 'Avatar'} className="navbar-avatar-img" />
-                      ) : (
-                        <span>{((session.user.name || session.user.email || 'U')[0]).toUpperCase()}</span>
-                      )}
-                    </div>
-                    <span className="navbar-mobile-user-name">{session.user.name || session.user.email}</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-secondary w-full"
-                    onClick={async () => {
-                      setMobileMenuOpen(false);
-                      await authClient.signOut();
-                      router.refresh();
-                    }}
+                  <CloseIconSmall />
+                </button>
+              </div>
+              <Link
+                href="/saved"
+                className={`navbar-mobile-link ${pathname === '/saved' ? 'active' : ''}`}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <BookmarkIcon />
+                <span>Saved Library</span>
+              </Link>
+              <div className="navbar-mobile-auth">
+                {isAuthPending ? (
+                  <div className="navbar-auth-skeleton w-full" />
+                ) : !session?.user ? (
+                  <Link
+                    href="/auth/sign-in"
+                    className="btn btn-primary w-full"
+                    onClick={() => setMobileMenuOpen(false)}
                   >
-                    Sign Out
-                  </button>
-                </div>
-              )}
+                    Sign In / Sign Up
+                  </Link>
+                ) : (
+                  <div className="navbar-mobile-user">
+                    <div className="navbar-mobile-user-info">
+                      <div className="navbar-user-avatar">
+                        {session.user.image ? (
+                          <img src={session.user.image} alt={session.user.name || 'Avatar'} className="navbar-avatar-img" />
+                        ) : (
+                          <span>{((session.user.name || session.user.email || 'U')[0]).toUpperCase()}</span>
+                        )}
+                      </div>
+                      <span className="navbar-mobile-user-name">{session.user.name || session.user.email}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary w-full"
+                      onClick={async () => {
+                        setMobileMenuOpen(false);
+                        await authClient.signOut();
+                        router.refresh();
+                      }}
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Mobile: expanded search row */}
+        {/* Mobile / Compact: Option A Fullscreen Search Overlay */}
         {searchOpen && (
-          <div ref={mobileSearchBoxRef} className="navbar-mobile-searchrow">
-            <form onSubmit={handleNavSearch} className="w-full flex gap-2">
-              <input
-                type="search"
-                className="input"
-                placeholder="Search saved videos by title…"
-                value={navQuery}
-                onChange={(e) => {
-                  setNavQuery(e.target.value);
-                  setDropdownOpen(true);
+          <div
+            ref={mobileSearchBoxRef}
+            className="navbar-fullscreen-search"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Search saved videos"
+          >
+            <div className="fullscreen-search-bar">
+              <button
+                type="button"
+                className="btn-icon search-back-btn"
+                onClick={() => {
+                  setSearchOpen(false);
+                  setDropdownOpen(false);
                 }}
-                autoFocus
-                aria-label="Mobile search query"
-              />
-              <button type="submit" className="btn btn-primary" aria-label="Search">
-                <SearchIcon />
+                aria-label="Close search"
+                title="Back"
+              >
+                <ArrowLeftIcon />
               </button>
-            </form>
-            {dropdownOpen && navQuery.trim() && (
-              <div className="nav-dropdown-menu mobile-dropdown" role="dialog">
-                {renderDropdownContent()}
-              </div>
-            )}
+              <form onSubmit={handleNavSearch} className="fullscreen-search-form" role="search">
+                <input
+                  ref={inputRef}
+                  type="search"
+                  className="fullscreen-search-input"
+                  placeholder="Search saved videos by title…"
+                  value={navQuery}
+                  onChange={(e) => {
+                    setNavQuery(e.target.value);
+                    setDropdownOpen(true);
+                  }}
+                  autoFocus
+                  aria-label="Search saved videos"
+                />
+                {navQuery && (
+                  <button
+                    type="button"
+                    className="fullscreen-search-clear"
+                    onClick={() => {
+                      setNavQuery('');
+                      setDropdownOpen(false);
+                      inputRef.current?.focus();
+                    }}
+                    aria-label="Clear search input"
+                  >
+                    <CloseIconSmall />
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  className="fullscreen-search-submit"
+                  aria-label="Search"
+                  title="Search saved videos"
+                >
+                  <SearchIcon />
+                </button>
+              </form>
+            </div>
+
+            <div className="fullscreen-search-content">
+              {navQuery.trim() ? (
+                renderDropdownContent()
+              ) : (
+                <div className="fullscreen-search-empty">
+                  <BookmarkIcon />
+                  <p className="empty-title">Search your saved videos</p>
+                  <p className="empty-desc">
+                    Type video title keywords to quickly find and jump to videos in your library.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm empty-action-btn"
+                    onClick={handleGoToChannelSearch}
+                  >
+                    Search Channel Videos on Home
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </nav>
@@ -816,11 +894,6 @@ export default function NavBar() {
         }
         .navbar-mobile-search { display: none; }
         .navbar-mobile-menu   { display: none; }
-        .navbar-mobile-searchrow {
-          padding: var(--space-2) var(--space-4) var(--space-3);
-          background-color: var(--bg-primary);
-          border-top: 1px solid var(--border-subtle);
-        }
 
         .navbar-auth-skeleton {
           width: 76px;
@@ -877,15 +950,144 @@ export default function NavBar() {
           color: var(--text-primary);
         }
 
+        /* Option A Fullscreen Mobile Search Overlay */
+        .navbar-fullscreen-search {
+          position: fixed;
+          inset: 0;
+          z-index: 1000;
+          background-color: var(--bg-primary);
+          display: flex;
+          flex-direction: column;
+          animation: searchSlideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+          padding-top: max(var(--space-2), var(--safe-top));
+          padding-bottom: max(var(--space-3), var(--safe-bottom));
+          padding-left: max(var(--space-3), var(--safe-left));
+          padding-right: max(var(--space-3), var(--safe-right));
+        }
+        @keyframes searchSlideIn {
+          from { opacity: 0; transform: translateY(-8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .fullscreen-search-bar {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+          height: 52px;
+          border-bottom: 1px solid var(--border-subtle);
+          padding: 0 var(--space-2);
+          flex-shrink: 0;
+        }
+        .search-back-btn {
+          color: var(--text-primary);
+          width: 44px;
+          height: 44px;
+        }
+        .fullscreen-search-form {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          background-color: var(--bg-secondary);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-full);
+          overflow: hidden;
+          height: 42px;
+          padding: 0 var(--space-1);
+        }
+        .fullscreen-search-form:focus-within {
+          border-color: #1c62b9;
+        }
+        .fullscreen-search-input {
+          flex: 1;
+          background: transparent;
+          border: none;
+          outline: none;
+          color: var(--text-primary);
+          font-size: var(--text-base);
+          padding: 0 var(--space-3);
+          min-width: 0;
+        }
+        .fullscreen-search-clear {
+          padding: 0 var(--space-2);
+          color: var(--text-muted);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 100%;
+        }
+        .fullscreen-search-clear:hover {
+          color: var(--text-primary);
+        }
+        .fullscreen-search-submit {
+          padding: 0 var(--space-3);
+          color: var(--text-primary);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 100%;
+          border-left: 1px solid var(--border);
+        }
+        .fullscreen-search-content {
+          flex: 1;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+          padding: var(--space-2) 0;
+        }
+        .fullscreen-search-empty {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+          padding: var(--space-8) var(--space-4);
+          gap: var(--space-2);
+          color: var(--text-muted);
+        }
+
+        /* Mobile Drawer & Backdrop */
+        .navbar-mobile-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 99;
+          background-color: rgba(0, 0, 0, 0.6);
+          backdrop-filter: blur(4px);
+          -webkit-backdrop-filter: blur(4px);
+          animation: fadeIn var(--transition-fast);
+        }
         .navbar-mobile-drawer {
+          position: absolute;
+          top: var(--nav-height);
+          left: 0;
+          right: 0;
+          max-height: calc(100dvh - var(--nav-height));
+          overflow-y: auto;
+          background-color: var(--bg-secondary);
+          border-bottom: 1px solid var(--border);
+          box-shadow: var(--shadow-lg);
+          padding: var(--space-3) max(var(--space-4), var(--safe-right)) max(var(--space-5), var(--safe-bottom)) max(var(--space-4), var(--safe-left));
           display: flex;
           flex-direction: column;
           gap: var(--space-3);
-          padding: var(--space-4);
-          background-color: var(--bg-secondary);
-          border-bottom: 1px solid var(--border);
+          animation: drawerSlideDown 0.22s cubic-bezier(0.16, 1, 0.3, 1);
         }
-
+        @keyframes drawerSlideDown {
+          from { opacity: 0; transform: translateY(-12px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .drawer-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding-bottom: var(--space-2);
+          border-bottom: 1px solid var(--border-subtle);
+        }
+        .drawer-title {
+          font-size: var(--text-xs);
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: var(--text-muted);
+        }
         .navbar-mobile-link {
           display: flex;
           align-items: center;
@@ -895,38 +1097,32 @@ export default function NavBar() {
           color: var(--text-primary);
           font-size: var(--text-sm);
           font-weight: 500;
+          min-height: 48px;
         }
         .navbar-mobile-link.active {
           background-color: var(--bg-tertiary);
         }
-
         .navbar-mobile-auth {
           padding-top: var(--space-2);
           border-top: 1px solid var(--border-subtle);
         }
-
         .navbar-mobile-user {
           display: flex;
           flex-direction: column;
           gap: var(--space-3);
         }
-
         .navbar-mobile-user-info {
           display: flex;
           align-items: center;
           gap: var(--space-3);
         }
-
         .navbar-mobile-user-name {
           font-size: var(--text-sm);
           color: var(--text-primary);
           font-weight: 500;
         }
 
-        @media (max-width: 640px) {
-          .navbar {
-            height: auto;
-          }
+        @media (max-width: 720px) {
           .navbar-search-container {
             display: none;
           }
@@ -940,8 +1136,26 @@ export default function NavBar() {
           .navbar-mobile-menu   { display: flex; }
           .navbar-logo-text { font-size: var(--text-base); }
         }
+
+        @media (pointer: coarse) {
+          .navbar-mobile-search,
+          .navbar-mobile-menu,
+          .navbar-search-btn {
+            min-width: 44px;
+            min-height: 44px;
+          }
+        }
       `}</style>
     </>
+  );
+}
+
+function ArrowLeftIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
+    </svg>
   );
 }
 
@@ -981,10 +1195,3 @@ function CloseIconSmall() {
   );
 }
 
-function PlayIconSmall() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <polygon points="5 3 19 12 5 21 5 3"/>
-    </svg>
-  );
-}

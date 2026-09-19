@@ -192,11 +192,16 @@ export default function VideoCard({
           overflow: hidden;
           background-color: transparent;
           transition: transform var(--transition-fast);
+          container-type: inline-size;
         }
         .video-card:hover {
           transform: translateY(-2px);
         }
-        .thumbnail-link { display: block; }
+        .thumbnail-link {
+          display: block;
+          border-radius: var(--radius-md);
+          overflow: hidden;
+        }
         .thumbnail-placeholder {
           width: 100%;
           aspect-ratio: 16/9;
@@ -209,7 +214,7 @@ export default function VideoCard({
         .video-info {
           display: flex;
           gap: var(--space-3);
-          padding: var(--space-3) var(--space-1) var(--space-1);
+          padding: var(--space-3) var(--space-1) var(--space-2);
           align-items: flex-start;
         }
         .channel-logo-link { flex-shrink: 0; }
@@ -240,11 +245,12 @@ export default function VideoCard({
           gap: var(--space-1);
         }
         .video-title {
-          font-size: var(--text-base);
+          font-size: clamp(0.85rem, 0.8rem + 0.25vw, 0.95rem);
           font-weight: 500;
           color: var(--text-primary);
-          line-height: 1.4;
+          line-height: 1.35;
           text-decoration: none;
+          word-break: break-word;
         }
         .video-title:hover { color: var(--text-primary); }
         .video-meta {
@@ -254,18 +260,37 @@ export default function VideoCard({
           gap: var(--space-1);
           font-size: var(--text-xs);
           color: var(--text-secondary);
+          line-height: 1.3;
         }
         .channel-name { color: var(--text-secondary); }
         .meta-sep { color: var(--text-muted); }
         .video-actions {
           display: flex;
           flex-direction: column;
-          gap: var(--space-1);
+          gap: 2px;
           flex-shrink: 0;
         }
         .save-btn { color: var(--text-secondary); }
         .save-btn.saved { color: var(--accent); }
         .save-btn:disabled { opacity: 0.5; }
+
+        @media (pointer: coarse) {
+          .video-actions .btn-icon {
+            min-width: 44px;
+            min-height: 44px;
+          }
+        }
+
+        @container (max-width: 240px) {
+          .video-info {
+            gap: var(--space-2);
+          }
+          .channel-logo, .channel-logo-placeholder {
+            width: 28px;
+            height: 28px;
+            font-size: var(--text-xs);
+          }
+        }
       `}</style>
     </article>
   );

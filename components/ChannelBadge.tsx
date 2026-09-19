@@ -122,22 +122,47 @@ export default function ChannelBadge({ channel, isActive = false, onSelect, onUn
           position: absolute;
           top: var(--space-1);
           right: var(--space-1);
-          width: 20px;
-          height: 20px;
+          width: 26px;
+          height: 26px;
           border-radius: 50%;
-          background-color: var(--bg-secondary);
+          background-color: var(--bg-tertiary);
           border: 1px solid var(--border);
           color: var(--text-muted);
           display: flex;
           align-items: center;
           justify-content: center;
           opacity: 0;
-          transition: opacity var(--transition-fast), color var(--transition-fast);
+          transition: opacity var(--transition-fast), color var(--transition-fast), background-color var(--transition-fast);
           cursor: pointer;
           padding: 0;
+          z-index: 2;
         }
-        .channel-badge:hover .badge-remove { opacity: 1; }
-        .badge-remove:hover { color: var(--accent); }
+        .channel-badge:hover .badge-remove,
+        .channel-badge:focus-within .badge-remove {
+          opacity: 1;
+        }
+        .badge-remove:hover {
+          color: #fff;
+          background-color: var(--error);
+          border-color: var(--error);
+        }
+
+        /* Touch devices: make remove button comfortably visible and easy to tap */
+        @media (hover: none) or (pointer: coarse) {
+          .badge-remove {
+            opacity: 0.85;
+            width: 32px;
+            height: 32px;
+            top: 4px;
+            right: 4px;
+            background-color: rgba(39, 39, 39, 0.95);
+          }
+          .badge-remove:active {
+            opacity: 1;
+            color: #fff;
+            background-color: var(--error);
+          }
+        }
       `}</style>
     </div>
   );

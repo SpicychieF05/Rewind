@@ -61,9 +61,11 @@ function HomePage() {
   // Load saved video IDs for authenticated user; keep empty for unauthenticated visitors
   useEffect(() => {
     if (!isAuthenticated) {
-      setSavedVideoIds(new Set());
-      setSavedVideos([]);
-      return;
+      const timer = setTimeout(() => {
+        setSavedVideoIds(new Set());
+        setSavedVideos([]);
+      }, 0);
+      return () => clearTimeout(timer);
     }
 
     type DbRow = {
@@ -386,6 +388,7 @@ function HomePage() {
           padding: var(--space-4) 0;
           border-bottom: 1px solid var(--border-subtle);
           margin-bottom: var(--space-2);
+          flex-wrap: wrap;
         }
         .channel-header-logo {
           border-radius: 50%;
@@ -395,12 +398,20 @@ function HomePage() {
           flex-shrink: 0;
         }
         .channel-header-name {
-          font-size: var(--text-lg);
+          font-size: clamp(var(--text-base), 3vw, var(--text-lg));
           font-weight: 700;
+          word-break: break-word;
         }
         .channel-header-count {
           margin-left: auto;
           flex-shrink: 0;
+        }
+        @media (max-width: 480px) {
+          .channel-header-count {
+            width: 100%;
+            margin-left: 0;
+            padding-left: calc(48px + var(--space-3));
+          }
         }
 
         /* Skeleton loader */
@@ -425,11 +436,11 @@ function HomePage() {
           flex-direction: column;
           align-items: center;
           gap: var(--space-4);
-          padding: var(--space-12) var(--space-4);
+          padding: clamp(var(--space-8), 8vw, var(--space-16)) var(--space-4);
           color: var(--text-muted);
           text-align: center;
         }
-        .hero-prompt p { font-size: var(--text-md); max-width: 400px; }
+        .hero-prompt p { font-size: clamp(var(--text-sm), 2.5vw, var(--text-md)); max-width: 420px; }
       `}</style>
     </div>
   );

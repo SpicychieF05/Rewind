@@ -39,21 +39,19 @@ export default function SignInPromptModal({
       aria-labelledby="signin-prompt-title"
     >
       <div className="modal-box signin-prompt-box">
-        <div className="modal-header">
+        <button
+          type="button"
+          className="btn-icon signin-close-btn"
+          onClick={onClose}
+          aria-label="Close dialog"
+        >
+          <XIcon />
+        </button>
+
+        <div className="modal-body" style={{ padding: 0 }}>
           <div className="prompt-icon-wrap">
             <BookmarkIcon />
           </div>
-          <button
-            type="button"
-            className="btn-icon"
-            onClick={onClose}
-            aria-label="Close dialog"
-          >
-            <XIcon />
-          </button>
-        </div>
-
-        <div className="modal-body">
           <h2 id="signin-prompt-title" className="prompt-title">
             {title}
           </h2>
@@ -62,7 +60,7 @@ export default function SignInPromptModal({
           <div className="prompt-actions">
             <Link
               href="/auth/sign-in"
-              className="btn btn-primary w-full"
+              className="btn btn-primary w-full signin-action-btn"
               onClick={onClose}
               id="signin-prompt-login-btn"
             >
@@ -70,7 +68,7 @@ export default function SignInPromptModal({
             </Link>
             <button
               type="button"
-              className="btn btn-ghost w-full"
+              className="btn btn-ghost w-full signin-action-btn"
               onClick={onClose}
               id="signin-prompt-cancel-btn"
             >
@@ -82,9 +80,23 @@ export default function SignInPromptModal({
 
       <style jsx>{`
         .signin-prompt-box {
-          max-width: 400px;
+          position: relative;
+          max-width: 420px;
+          width: min(100%, 420px);
+          max-height: min(90dvh, 520px);
           text-align: center;
           padding: var(--space-6) var(--space-5);
+          overflow-y: auto;
+        }
+        .signin-close-btn {
+          position: absolute;
+          top: var(--space-3);
+          right: var(--space-3);
+          width: 36px;
+          height: 36px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
         }
         .prompt-icon-wrap {
           display: inline-flex;
@@ -98,7 +110,7 @@ export default function SignInPromptModal({
           margin: 0 auto var(--space-3);
         }
         .prompt-title {
-          font-size: var(--text-lg);
+          font-size: clamp(var(--text-base), 3vw, var(--text-lg));
           font-weight: 700;
           color: var(--text-primary);
           margin-bottom: var(--space-2);
@@ -113,6 +125,19 @@ export default function SignInPromptModal({
           display: flex;
           flex-direction: column;
           gap: var(--space-2);
+        }
+        .signin-action-btn {
+          min-height: 44px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        @media (pointer: coarse) {
+          .signin-close-btn {
+            width: 44px;
+            height: 44px;
+          }
         }
       `}</style>
     </div>

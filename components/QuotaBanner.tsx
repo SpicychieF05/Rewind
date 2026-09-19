@@ -56,20 +56,29 @@ const bannerStyles = `
   .quota-banner {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: var(--space-3);
-    padding: var(--space-2) var(--space-4);
+    padding: var(--space-2) var(--space-3);
     border-radius: var(--radius-sm);
     font-size: var(--text-xs);
     margin-bottom: var(--space-3);
+    flex-wrap: wrap;
   }
   .quota-ok      { background-color: var(--bg-secondary); color: var(--text-secondary); }
   .quota-warning { background-color: rgba(245,158,11,0.12); color: var(--warning); border: 1px solid rgba(245,158,11,0.3); }
   .quota-exceeded{ background-color: rgba(239,68,68,0.12); color: var(--error); border: 1px solid rgba(239,68,68,0.3); }
-  .quota-left { display: flex; align-items: center; gap: var(--space-2); flex: 1; }
+  .quota-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    flex: 1 1 200px;
+    flex-wrap: wrap;
+  }
   .quota-label { color: var(--text-muted); }
   .quota-remaining { color: var(--text-muted); }
   .quota-bar-wrapper {
-    width: 80px;
+    width: 64px;
     height: 4px;
     background-color: var(--border);
     border-radius: var(--radius-full);
@@ -83,12 +92,11 @@ const bannerStyles = `
     transition: width 0.4s ease;
   }
   .quota-bar-fill.warn { background-color: var(--warning); }
-  .quota-text strong { color: inherit; }
-
-  @media (max-width: 640px) {
-    .quota-remaining { display: none; }
-    .quota-bar-wrapper { display: none; }
+  .quota-text {
+    line-height: 1.4;
+    word-break: break-word;
   }
+  .quota-text strong { color: inherit; }
 `;
 
 function QuotaIcon() {

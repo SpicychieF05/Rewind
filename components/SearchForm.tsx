@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 export type MatchMode = 'exact' | 'contains';
 export type Timeframe =
@@ -34,6 +35,7 @@ const TIMEFRAME_OPTIONS: { value: Timeframe; label: string }[] = [
 ];
 
 export default function SearchForm({ onSearch, loading, initialQuery = '' }: Props) {
+  const router = useRouter();
   const [channelInput, setChannelInput] = useState('');
   const [query, setQuery] = useState(initialQuery);
   const [matchMode, setMatchMode] = useState<MatchMode>('contains');
@@ -50,8 +52,7 @@ export default function SearchForm({ onSearch, loading, initialQuery = '' }: Pro
     setQuery('');
     setMatchMode('contains');
     setTimeframe('1year');
-    // Full page reload to clear results and URL state
-    window.location.href = '/';
+    router.push('/');
   };
 
   const isDirty = channelInput.trim() !== '' || query.trim() !== '';
@@ -64,134 +65,162 @@ export default function SearchForm({ onSearch, loading, initialQuery = '' }: Pro
       aria-label="Video search form"
       suppressHydrationWarning
     >
-      {/* Channel input */}
-      <div className="search-field" suppressHydrationWarning>
-        <label htmlFor="channel-input" className="search-label">Channel</label>
-        <input
-          id="channel-input"
-          type="text"
-          className="input"
-          placeholder="Channel handle, channel URL, or any video URL"
-          value={channelInput}
-          onChange={(e) => setChannelInput(e.target.value)}
-          required
-          aria-required="true"
-          disabled={loading}
-        />
-      </div>
-
-      {/* Keyword */}
-      <div className="search-field" suppressHydrationWarning>
-        <label htmlFor="keyword-input" className="search-label">Keyword</label>
-        <input
-          id="keyword-input"
-          type="text"
-          className="input"
-          placeholder="Video title or keyword (optional)"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          disabled={loading}
-        />
-      </div>
-
-      {/* Match mode */}
-      <div className="search-field search-field-narrow" suppressHydrationWarning>
-        <span className="search-label" id="match-mode-label">Match</span>
-        <div
-          className="match-toggle"
-          role="group"
-          aria-labelledby="match-mode-label"
-          suppressHydrationWarning
-        >
-          <button
-            type="button"
-            id="match-contains"
-            className={`match-btn ${matchMode === 'contains' ? 'active' : ''}`}
-            onClick={() => setMatchMode('contains')}
-            aria-pressed={matchMode === 'contains'}
+      {/* Primary inputs group */}
+      <div className="search-row-primary">
+        {/* Channel input */}
+        <div className="search-field" suppressHydrationWarning>
+          <label htmlFor="channel-input" className="search-label">Channel</label>
+          <input
+            id="channel-input"
+            type="text"
+            className="input"
+            placeholder="Channel handle, URL, or video URL"
+            value={channelInput}
+            onChange={(e) => setChannelInput(e.target.value)}
+            required
+            aria-required="true"
             disabled={loading}
-          >
-            Contains
-          </button>
-          <button
-            type="button"
-            id="match-exact"
-            className={`match-btn ${matchMode === 'exact' ? 'active' : ''}`}
-            onClick={() => setMatchMode('exact')}
-            aria-pressed={matchMode === 'exact'}
+          />
+        </div>
+
+        {/* Keyword */}
+        <div className="search-field" suppressHydrationWarning>
+          <label htmlFor="keyword-input" className="search-label">Keyword</label>
+          <input
+            id="keyword-input"
+            type="text"
+            className="input"
+            placeholder="Video title or keyword (optional)"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
             disabled={loading}
-          >
-            Exact
-          </button>
+          />
         </div>
       </div>
 
-      {/* Timeframe */}
-      <div className="search-field search-field-narrow" suppressHydrationWarning>
-        <label htmlFor="timeframe-select" className="search-label">Timeframe</label>
-        <select
-          id="timeframe-select"
-          className="input select"
-          value={timeframe}
-          onChange={(e) => setTimeframe(e.target.value as Timeframe)}
-          disabled={loading}
-          aria-label="Select timeframe"
-        >
-          {TIMEFRAME_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Submit + Reset */}
-      <div className="search-field search-field-submit" suppressHydrationWarning>
-        <button
-          id="search-submit-btn"
-          type="submit"
-          className="btn btn-primary search-submit"
-          disabled={loading || !channelInput.trim()}
-          aria-busy={loading}
-        >
-          {loading ? <><span className="spinner" aria-hidden="true" /> Searching…</> : 'Search'}
-        </button>
-        {isDirty && !loading && (
-          <button
-            id="search-reset-btn"
-            type="button"
-            className="btn btn-ghost search-reset"
-            onClick={handleReset}
-            aria-label="Clear search and reset page"
-            title="Clear all fields and reload"
+      {/* Filter options + actions group */}
+      <div className="search-row-secondary">
+        {/* Match mode */}
+        <div className="search-field search-field-narrow" suppressHydrationWarning>
+          <span className="search-label" id="match-mode-label">Match</span>
+          <div
+            className="match-toggle"
+            role="group"
+            aria-labelledby="match-mode-label"
+            suppressHydrationWarning
           >
-            <ResetIcon />
-            Reset
-          </button>
-        )}
+            <button
+              type="button"
+              id="match-contains"
+              className={`match-btn ${matchMode === 'contains' ? 'active' : ''}`}
+              onClick={() => setMatchMode('contains')}
+              aria-pressed={matchMode === 'contains'}
+              disabled={loading}
+            >
+              Contains
+            </button>
+            <button
+              type="button"
+              id="match-exact"
+              className={`match-btn ${matchMode === 'exact' ? 'active' : ''}`}
+              onClick={() => setMatchMode('exact')}
+              aria-pressed={matchMode === 'exact'}
+              disabled={loading}
+            >
+              Exact
+            </button>
+          </div>
+        </div>
+
+        {/* Timeframe */}
+        <div className="search-field search-field-narrow" suppressHydrationWarning>
+          <label htmlFor="timeframe-select" className="search-label">Timeframe</label>
+          <select
+            id="timeframe-select"
+            className="input select"
+            value={timeframe}
+            onChange={(e) => setTimeframe(e.target.value as Timeframe)}
+            disabled={loading}
+            aria-label="Select timeframe"
+          >
+            {TIMEFRAME_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Submit + Reset Actions */}
+        <div className="search-field search-field-actions" suppressHydrationWarning>
+          <span className="search-label search-label-placeholder" aria-hidden="true">&nbsp;</span>
+          <div className="search-actions-wrap">
+            <button
+              id="search-submit-btn"
+              type="submit"
+              className="btn btn-primary search-submit"
+              disabled={loading || !channelInput.trim()}
+              aria-busy={loading}
+            >
+              {loading ? <><span className="spinner" aria-hidden="true" /> Searching…</> : 'Search'}
+            </button>
+            {isDirty && !loading && (
+              <button
+                id="search-reset-btn"
+                type="button"
+                className="btn btn-ghost search-reset"
+                onClick={handleReset}
+                aria-label="Clear search and reset page"
+                title="Clear all fields and reload"
+              >
+                <ResetIcon />
+                <span>Reset</span>
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       <style jsx>{`
         .search-form {
           display: flex;
-          flex-wrap: wrap;
+          flex-direction: column;
           gap: var(--space-3);
+          padding: var(--space-4) 0;
+        }
+        .search-row-primary {
+          display: flex;
+          gap: var(--space-3);
+          flex-wrap: wrap;
+        }
+        .search-row-secondary {
+          display: flex;
+          gap: var(--space-3);
+          flex-wrap: wrap;
           align-items: flex-end;
-          padding: var(--space-5) 0;
         }
         .search-field {
           display: flex;
           flex-direction: column;
           gap: var(--space-1);
           flex: 1;
-          min-width: 200px;
+          min-width: min(100%, 220px);
         }
-        .search-field-narrow { flex: 0 0 auto; min-width: 140px; }
-        .search-field-submit  { flex: 0 0 auto; min-width: unset; }
+        .search-field-narrow {
+          flex: 1;
+          min-width: min(100%, 140px);
+        }
+        .search-field-actions {
+          flex: 1;
+          min-width: min(100%, 180px);
+        }
         .search-label {
           font-size: var(--text-xs);
           font-weight: 500;
           color: var(--text-secondary);
           text-transform: uppercase;
           letter-spacing: 0.5px;
+        }
+        .search-label-placeholder {
+          user-select: none;
         }
         .match-toggle {
           display: flex;
@@ -208,17 +237,28 @@ export default function SearchForm({ onSearch, loading, initialQuery = '' }: Pro
           background: transparent;
           transition: background-color var(--transition-fast), color var(--transition-fast);
           padding: 0 var(--space-3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
         .match-btn:hover { background-color: var(--bg-secondary); color: var(--text-primary); }
         .match-btn.active { background-color: var(--bg-secondary); color: var(--text-primary); }
         .match-btn:first-child { border-right: 1px solid var(--border); }
         .match-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .search-actions-wrap {
+          display: flex;
+          gap: var(--space-2);
+          align-items: center;
+        }
         .search-submit {
           height: 38px;
           padding: 0 var(--space-6);
           border-radius: var(--radius-sm);
           font-size: var(--text-sm);
           font-weight: 500;
+          flex: 1;
+          justify-content: center;
         }
         .search-submit:disabled { opacity: 0.5; cursor: not-allowed; }
         .search-reset {
@@ -227,16 +267,57 @@ export default function SearchForm({ onSearch, loading, initialQuery = '' }: Pro
           border-radius: var(--radius-sm);
           font-size: var(--text-sm);
           font-weight: 500;
-          margin-top: var(--space-2);
+          justify-content: center;
+        }
+
+        /* Large screens: combine everything into one horizontal fluid line if room */
+        @media (min-width: 1024px) {
+          .search-form {
+            flex-direction: row;
+            flex-wrap: wrap;
+            align-items: flex-end;
+          }
+          .search-row-primary {
+            flex: 2;
+            min-width: 440px;
+          }
+          .search-row-secondary {
+            flex: 2;
+            min-width: 440px;
+          }
         }
 
         @media (max-width: 640px) {
-          .search-form { flex-direction: column; }
+          .search-label-placeholder {
+            display: none;
+          }
+          .search-row-primary,
+          .search-row-secondary {
+            flex-direction: column;
+            gap: var(--space-3);
+          }
           .search-field,
           .search-field-narrow,
-          .search-field-submit { min-width: unset; width: 100%; flex: unset; }
-          .search-submit { width: 100%; justify-content: center; }
-          .search-reset  { width: 100%; justify-content: center; }
+          .search-field-actions {
+            width: 100%;
+            min-width: 100%;
+          }
+          .search-actions-wrap {
+            width: 100%;
+          }
+          .search-submit,
+          .search-reset {
+            height: 42px;
+          }
+        }
+
+        @media (pointer: coarse) {
+          .match-toggle,
+          .search-submit,
+          .search-reset,
+          .input {
+            min-height: 44px;
+          }
         }
       `}</style>
     </form>

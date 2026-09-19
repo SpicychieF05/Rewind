@@ -84,14 +84,14 @@ function PlaylistPicker({ video, playlists, onAdd, onClose }: PlaylistPickerProp
       aria-modal="true"
       aria-labelledby="picker-title"
     >
-      <div className="modal-box">
+      <div className="modal-box picker-modal-box">
         <div className="modal-header">
           <h2 id="picker-title" style={{ fontSize: 'var(--text-md)', fontWeight: 700 }}>
             Add to playlist
           </h2>
           <button
             id="picker-close"
-            className="btn-icon"
+            className="btn-icon picker-close-btn"
             onClick={onClose}
             aria-label="Close playlist picker"
           >
@@ -99,7 +99,7 @@ function PlaylistPicker({ video, playlists, onAdd, onClose }: PlaylistPickerProp
           </button>
         </div>
         <div className="modal-body">
-          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginBottom: 'var(--space-3)' }}>
+          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginBottom: 'var(--space-3)', wordBreak: 'break-word' }}>
             Adding: <strong style={{ color: 'var(--text-primary)' }}>{video.title}</strong>
           </p>
 
@@ -111,19 +111,12 @@ function PlaylistPicker({ video, playlists, onAdd, onClose }: PlaylistPickerProp
                     id={`picker-playlist-${pl.playlist_id}`}
                     onClick={() => handleAdd(pl.playlist_id)}
                     disabled={loading === pl.playlist_id}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
-                      width: '100%', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)',
-                      background: 'transparent', color: 'var(--text-primary)',
-                      transition: 'background-color 0.15s',
-                      fontSize: 'var(--text-sm)',
-                    }}
                     className="picker-row"
                     aria-label={`Add to ${pl.name}`}
                   >
                     <PlaylistIcon />
-                    <span style={{ flex: 1, textAlign: 'left' }}>{pl.name}</span>
-                    <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
+                    <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pl.name}</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)', flexShrink: 0 }}>
                       {pl.video_count} video{pl.video_count !== 1 ? 's' : ''}
                     </span>
                     {loading === pl.playlist_id && <span className="spinner" aria-hidden="true" />}
@@ -136,7 +129,7 @@ function PlaylistPicker({ video, playlists, onAdd, onClose }: PlaylistPickerProp
           {!creating ? (
             <button
               id="picker-new-playlist"
-              className="btn btn-ghost w-full"
+              className="btn btn-ghost w-full picker-create-trigger"
               style={{ justifyContent: 'flex-start' }}
               onClick={() => setCreating(true)}
             >
@@ -147,8 +140,7 @@ function PlaylistPicker({ video, playlists, onAdd, onClose }: PlaylistPickerProp
               <input
                 id="picker-new-name"
                 type="text"
-                className="input"
-                style={{ flex: 1, minWidth: 150 }}
+                className="input picker-name-input"
                 placeholder="Playlist name"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
@@ -159,7 +151,7 @@ function PlaylistPicker({ video, playlists, onAdd, onClose }: PlaylistPickerProp
               <button
                 type="submit"
                 id="picker-create-submit"
-                className="btn btn-primary"
+                className="btn btn-primary picker-submit-btn"
                 disabled={loading === 'create'}
               >
                 {loading === 'create' ? <span className="spinner" aria-hidden="true" /> : 'Create & add'}
@@ -169,7 +161,54 @@ function PlaylistPicker({ video, playlists, onAdd, onClose }: PlaylistPickerProp
         </div>
       </div>
       <style jsx>{`
+        .picker-modal-box {
+          max-width: 440px;
+          width: min(100%, 440px);
+          max-height: min(90dvh, 520px);
+          overflow-y: auto;
+        }
+        .picker-close-btn {
+          min-width: 36px;
+          min-height: 36px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .picker-row {
+          display: flex;
+          align-items: center;
+          gap: var(--space-3);
+          width: 100%;
+          padding: var(--space-3);
+          border-radius: var(--radius-md);
+          background: transparent;
+          color: var(--text-primary);
+          transition: background-color 0.15s;
+          font-size: var(--text-sm);
+          min-height: 44px;
+        }
         .picker-row:hover { background-color: var(--bg-tertiary); }
+        .picker-create-trigger {
+          min-height: 44px;
+        }
+        .picker-name-input {
+          flex: 1 1 160px;
+          min-height: 40px;
+          font-size: 16px;
+        }
+        .picker-submit-btn {
+          min-height: 40px;
+        }
+        @media (pointer: coarse) {
+          .picker-close-btn {
+            min-width: 44px;
+            min-height: 44px;
+          }
+          .picker-name-input,
+          .picker-submit-btn {
+            min-height: 44px;
+          }
+        }
       `}</style>
     </div>
   );
@@ -199,10 +238,13 @@ function SavedPageContent() {
   const [activeVideo, setActiveVideo] = useState<VideoResult | null>(null);
 
   useEffect(() => {
-    setSearchQuery(urlQuery);
-    if (urlQuery) {
-      setActiveTab('videos');
-    }
+    const timer = setTimeout(() => {
+      setSearchQuery(urlQuery);
+      if (urlQuery) {
+        setActiveTab('videos');
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [urlQuery]);
 
   const normalizeVideo = (v: Record<string, unknown>): VideoResult => ({
@@ -242,7 +284,12 @@ function SavedPageContent() {
     }
   }, [router]);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void loadAll();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [loadAll]);
 
   // Filter videos by channel and title search query
   const filteredVideos = videos.filter((v) => {
@@ -302,7 +349,7 @@ function SavedPageContent() {
 
         {searchQuery.trim() && (
           <div id="search-filter-chip" className="filter-chip" role="status" aria-live="polite">
-            <span>Title search: <strong>"{searchQuery.trim()}"</strong></span>
+            <span>Title search: <strong>&quot;{searchQuery.trim()}&quot;</strong></span>
             <button
               className="btn-icon filter-chip-close"
               onClick={clearSearchFilter}
@@ -366,7 +413,7 @@ function SavedPageContent() {
                   <VideoIcon />
                   <h3>
                     {searchQuery.trim()
-                      ? `No saved videos matching "${searchQuery.trim()}"`
+                      ? <>No saved videos matching &quot;{searchQuery.trim()}&quot;</>
                       : activeChannelFilter
                       ? 'No saved videos from this channel'
                       : 'No saved videos'}
@@ -458,7 +505,7 @@ function SavedPageContent() {
 
       <style jsx>{`
         .saved-heading {
-          font-size: var(--text-2xl);
+          font-size: clamp(var(--text-xl), 3vw, var(--text-2xl));
           font-weight: 700;
           margin-bottom: var(--space-4);
         }
@@ -472,11 +519,23 @@ function SavedPageContent() {
           padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
           font-size: var(--text-sm);
           color: var(--text-secondary);
+          max-width: 100%;
+          word-break: break-word;
         }
         .filter-chip-close {
-          width: 20px;
-          height: 20px;
+          width: 28px;
+          height: 28px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
           color: var(--text-muted);
+          border-radius: var(--radius-full);
+        }
+        @media (pointer: coarse) {
+          .filter-chip-close {
+            width: 36px;
+            height: 36px;
+          }
         }
       `}</style>
     </div>
