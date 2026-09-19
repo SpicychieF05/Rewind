@@ -1,7 +1,3 @@
-// auth-migrate.mjs
-// Run with: node auth-migrate.mjs
-// Reads DATABASE_URL from .env.local and executes Neon Auth migration
-
 import { readFileSync } from 'fs';
 import { neon } from '@neondatabase/serverless';
 

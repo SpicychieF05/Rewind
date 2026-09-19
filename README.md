@@ -38,6 +38,7 @@ Built with: **Next.js 16 (App Router)** · **React 19** · **Neon Postgres** · 
 ## ⚡ Quick Start (Local Development)
 
 ### 1. Prerequisites
+
 - **Node.js 18+** installed
 - A **Google Cloud account** (for YouTube Data API v3)
 - A **Neon account** ([neon.tech](https://neon.tech)) with a serverless Postgres project
@@ -49,6 +50,7 @@ Built with: **Next.js 16 (App Router)** · **React 19** · **Neon Postgres** · 
 Before configuring your environment, gather the following 4 credentials:
 
 #### A. YouTube Data API v3 Key (`YOUTUBE_API_KEY`)
+
 1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
 2. Create a new project (or select an existing one).
 3. Navigate to **APIs & Services → Library**, search for **YouTube Data API v3**, and click **Enable**.
@@ -56,12 +58,14 @@ Before configuring your environment, gather the following 4 credentials:
 5. Copy your generated API key.
 
 #### B. Neon Postgres Database URL (`DATABASE_URL`)
+
 1. Log in to your [Neon Console](https://console.neon.tech/).
 2. Create a new project (or select an existing one).
 3. Under **Dashboard → Connection Details**, choose **Pooled connection**.
 4. Copy the connection string (format: `postgres://user:password@ep-xyz.region.aws.neon.tech/neondb?sslmode=require`).
 
 #### C. Neon Auth Base URL (`NEON_AUTH_BASE_URL`)
+
 1. In your Neon Console project, navigate to **Auth** in the left sidebar.
 2. If not already enabled, click **Enable Auth**.
 3. Under **Auth Settings**:
@@ -71,6 +75,7 @@ Before configuring your environment, gather the following 4 credentials:
 4. Copy your project's **Auth URL** (format: `https://ep-xyz.neonauth.region.aws.neon.tech/neondb/auth`).
 
 #### D. Neon Auth Cookie Secret (`NEON_AUTH_COOKIE_SECRET`)
+
 Neon Auth requires a `NEON_AUTH_COOKIE_SECRET` — a random 32+ character string used to sign session cookies. Generate one by running:
 
 ```bash
@@ -96,11 +101,13 @@ npm install
 ### 4. Configure Environment Variables
 
 Copy `.env.local.example` to `.env.local`:
+
 ```bash
 cp .env.local.example .env.local
 ```
 
 Fill in your 4 credentials in `.env.local`:
+
 ```env
 # YouTube Data API v3 key
 YOUTUBE_API_KEY=your_youtube_api_key_here
@@ -118,6 +125,7 @@ NEON_AUTH_COOKIE_SECRET=your_generated_openssl_32_byte_secret
 ### 5. Run Database Migration (Once)
 
 Initializes the required database schema, multi-tenant ownership columns, and indexes:
+
 ```bash
 node auth-migrate.mjs
 ```
@@ -137,6 +145,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ## 🚀 Deploying to Vercel
 
 ### 1. Push to GitHub
+
 ```bash
 git add .
 git commit -m "Deploy Rewind with Neon Auth"
@@ -144,27 +153,32 @@ git push origin main
 ```
 
 ### 2. Import to Vercel
+
 1. Go to [vercel.com/new](https://vercel.com/new).
 2. Import your **Rewind** repository (Vercel automatically detects Next.js).
 
 ### 3. Add Environment Variables
+
 In your Vercel project settings (**Settings → Environment Variables**), add all 4 variables for **Production**, **Preview**, and **Development**:
 
-| Key | Description | Example |
-|-----|-------------|---------|
-| `YOUTUBE_API_KEY` | Google YouTube Data API v3 key | `AIzaSy...` |
-| `DATABASE_URL` | Neon Postgres pooled connection string | `postgres://...@...neon.tech/neondb?sslmode=require` |
-| `NEON_AUTH_BASE_URL` | Neon Auth base URL from Neon Console | `https://ep-xyz.neonauth.region.aws.neon.tech/neondb/auth` |
-| `NEON_AUTH_COOKIE_SECRET` | 32+ character cookie secret from `openssl` | Generated base64 string |
+| Key                       | Description                                | Example                                                    |
+| ------------------------- | ------------------------------------------ | ---------------------------------------------------------- |
+| `YOUTUBE_API_KEY`         | Google YouTube Data API v3 key             | `AIzaSy...`                                                |
+| `DATABASE_URL`            | Neon Postgres pooled connection string     | `postgres://...@...neon.tech/neondb?sslmode=require`       |
+| `NEON_AUTH_BASE_URL`      | Neon Auth base URL from Neon Console       | `https://ep-xyz.neonauth.region.aws.neon.tech/neondb/auth` |
+| `NEON_AUTH_COOKIE_SECRET` | 32+ character cookie secret from `openssl` | Generated base64 string                                    |
 
 ### 4. Configure Production URL in Neon Console
+
 After Vercel assigns your project domain (e.g., `https://rewind.vercel.app`):
+
 1. Go to **Neon Console → Auth → Settings**.
 2. Add your production domain to **Allowed Origins / Redirect URLs**:
    - `https://your-project.vercel.app` (and your custom domain if applicable)
 3. Save changes.
 
 ### 5. Deploy
+
 Click **Deploy** — future pushes to the `main` branch will automatically deploy.
 
 ---
@@ -173,24 +187,26 @@ Click **Deploy** — future pushes to the `main` branch will automatically deplo
 
 The application uses 6 tables in PostgreSQL managed via `@neondatabase/serverless`:
 
-| Table | Primary Key | Description |
-|-------|-------------|-------------|
-| `saved_channels` | `(user_id, channel_id)` | User-bookmarked channels with logos & subscriber counts |
-| `saved_videos` | `(user_id, video_id)` | User-saved videos with metadata & timestamps |
-| `playlists` | `playlist_id` | User-created custom playlists scoped by `user_id` |
+| Table             | Primary Key               | Description                                                              |
+| ----------------- | ------------------------- | ------------------------------------------------------------------------ |
+| `saved_channels`  | `(user_id, channel_id)`   | User-bookmarked channels with logos & subscriber counts                  |
+| `saved_videos`    | `(user_id, video_id)`     | User-saved videos with metadata & timestamps                             |
+| `playlists`       | `playlist_id`             | User-created custom playlists scoped by `user_id`                        |
 | `playlist_videos` | `(playlist_id, video_id)` | Join table connecting saved videos to playlists with `position` ordering |
-| `quota_usage` | `date` | Global YouTube Data API quota tracking (resets daily at midnight PST) |
-| `search_cache` | `cache_key` | Server-side query cache (24h TTL) to minimize external API requests |
+| `quota_usage`     | `date`                    | Global YouTube Data API quota tracking (resets daily at midnight PST)    |
+| `search_cache`    | `cache_key`               | Server-side query cache (24h TTL) to minimize external API requests      |
 
 ---
 
 ## 🔑 YouTube API Quota & Efficiency
 
 YouTube Data API v3 default free tier is **10,000 units/day**:
+
 - `search.list` = **100 units** per call (each page of results)
 - `videos.list` = **1 unit** per call
 
 **How Rewind protects your quota**:
+
 - Caches search queries in PostgreSQL (`search_cache`) for 24 hours.
 - Tracks daily consumption in `quota_usage`.
 - Displays a quota progress banner on the home page and disables pagination when usage reaches 9,500 units.
