@@ -474,8 +474,10 @@ export default function NavBar() {
                       role="menuitem"
                       onClick={() => setAvatarMenuOpen(false)}
                     >
-                      <Icon as={Library} size={16} anim="tick" />
-                      <span>Saved Library</span>
+                      <span className="menu-item-icon">
+                        <Icon as={Library} size={16} anim="tick" />
+                      </span>
+                      <span className="menu-item-label">Saved Library</span>
                     </Link>
 
                     {/* Sign out item */}
@@ -489,8 +491,10 @@ export default function NavBar() {
                         router.refresh();
                       }}
                     >
-                      <Icon as={LogOut} size={16} anim="nudge-x" />
-                      <span>Sign Out</span>
+                      <span className="menu-item-icon">
+                        <Icon as={LogOut} size={16} anim="nudge-x" />
+                      </span>
+                      <span className="menu-item-label">Sign Out</span>
                     </button>
                   </div>
                 )}
@@ -600,7 +604,7 @@ export default function NavBar() {
         }
 
         /* 1. Logo Row: badge left of wordmark, horizontal row */
-        .navbar-logo {
+        :global(.navbar-logo) {
           display: flex;
           flex-direction: row;
           align-items: center;
@@ -731,28 +735,43 @@ export default function NavBar() {
           background-color: var(--surface-2);
         }
 
-        .navbar-saved-pill {
+        :global(.navbar-saved-pill) {
           display: inline-flex;
           align-items: center;
+          justify-content: center;
           gap: var(--space-2);
           height: var(--control-h);
           padding: 0 var(--space-4);
           border-radius: var(--radius-full);
           background-color: var(--surface-2);
-          border: 1px solid var(--border-subtle);
+          border: 1px solid var(--border);
           color: var(--text-primary);
           font-size: var(--text-sm);
           font-weight: 500;
-          transition: background-color var(--transition-fast), border-color var(--transition-fast);
+          line-height: 1;
+          text-decoration: none;
+          white-space: nowrap;
+          user-select: none;
+          box-shadow: var(--surface-highlight);
+          transition: background-color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast), color var(--transition-fast);
         }
-        .navbar-saved-pill:hover {
+        :global(.navbar-saved-pill:hover) {
           background-color: var(--surface-3);
-          border-color: var(--border);
+          border-color: var(--border-strong);
+          color: #fff;
         }
-        .navbar-saved-pill.active {
+        :global(.navbar-saved-pill:active) {
+          transform: scale(0.98);
+        }
+        :global(.navbar-saved-pill.active) {
           background-color: var(--surface-3);
           border-color: var(--accent);
           color: #fff;
+          box-shadow: 0 0 10px var(--accent-ring);
+        }
+        :global(.navbar-saved-pill .saved-pill-label) {
+          display: inline-block;
+          line-height: 1;
         }
 
         .nav-signin-btn {
@@ -857,7 +876,7 @@ export default function NavBar() {
           background-color: var(--border-subtle);
           margin: var(--space-1) 0;
         }
-        .avatar-menu-item {
+        :global(.avatar-menu-item) {
           display: flex;
           align-items: center;
           gap: var(--space-3);
@@ -865,20 +884,49 @@ export default function NavBar() {
           padding: var(--space-2) var(--space-3);
           border-radius: var(--radius-md);
           font-size: var(--text-sm);
+          font-weight: 500;
           color: var(--text-primary);
-          transition: background-color var(--transition-fast);
+          text-decoration: none;
+          background: transparent;
+          border: none;
           cursor: pointer;
+          box-sizing: border-box;
           min-height: 40px;
           text-align: left;
+          line-height: 1;
+          transition: background-color var(--transition-fast), color var(--transition-fast);
         }
-        .avatar-menu-item:hover {
+        :global(.avatar-menu-item:hover) {
           background-color: var(--surface-3);
+          color: #fff;
         }
-        .signout-item {
+        :global(.avatar-menu-item:active) {
+          background-color: var(--surface-4);
+        }
+        :global(.avatar-menu-item.active) {
+          background-color: var(--surface-2);
+          color: var(--text-primary);
+          font-weight: 600;
+        }
+        :global(.avatar-menu-item.signout-item) {
           color: var(--text-secondary);
         }
-        .signout-item:hover {
+        :global(.avatar-menu-item.signout-item:hover) {
           color: var(--error);
+          background-color: rgba(239, 68, 68, 0.12);
+        }
+        :global(.avatar-menu-item .menu-item-icon) {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 20px;
+          height: 20px;
+          flex-shrink: 0;
+          color: inherit;
+        }
+        :global(.avatar-menu-item .menu-item-label) {
+          flex: 1;
+          line-height: 1.2;
         }
 
         /* Dropdown autocomplete */
@@ -958,12 +1006,13 @@ export default function NavBar() {
           text-transform: uppercase;
           letter-spacing: 0.5px;
         }
-        .dropdown-view-all {
+        :global(.dropdown-view-all) {
           color: var(--accent);
           font-weight: 500;
           text-transform: none;
+          text-decoration: none;
         }
-        .dropdown-view-all:hover {
+        :global(.dropdown-view-all:hover) {
           text-decoration: underline;
         }
         .dropdown-list {
@@ -972,15 +1021,17 @@ export default function NavBar() {
           max-height: 320px;
           overflow-y: auto;
         }
-        .dropdown-item {
+        :global(.dropdown-item) {
           display: flex;
           align-items: center;
           gap: var(--space-3);
           padding: var(--space-2) var(--space-4);
           border-bottom: 1px solid var(--border-subtle);
           transition: background-color var(--transition-fast);
+          text-decoration: none;
+          color: inherit;
         }
-        .dropdown-item:hover {
+        :global(.dropdown-item:hover) {
           background-color: var(--surface-2);
         }
         .dropdown-thumb-box {
@@ -1027,12 +1078,13 @@ export default function NavBar() {
           border-top: 1px solid var(--border-subtle);
           text-align: center;
         }
-        .dropdown-footer-link {
+        :global(.dropdown-footer-link) {
           font-size: var(--text-xs);
           color: var(--text-secondary);
           font-weight: 500;
+          text-decoration: none;
         }
-        .dropdown-footer-link:hover {
+        :global(.dropdown-footer-link:hover) {
           color: var(--text-primary);
         }
 
@@ -1110,10 +1162,10 @@ export default function NavBar() {
           .navbar-search-pill-wrap {
             max-width: 360px;
           }
-          .saved-pill-label {
+          :global(.navbar-saved-pill .saved-pill-label) {
             display: none;
           }
-          .navbar-saved-pill {
+          :global(.navbar-saved-pill) {
             padding: 0 var(--space-3);
           }
         }
@@ -1122,7 +1174,7 @@ export default function NavBar() {
           .navbar-search-pill-wrap {
             display: none;
           }
-          .navbar-saved-pill {
+          :global(.navbar-saved-pill) {
             display: none;
           }
           .navbar-search-toggle-btn {
