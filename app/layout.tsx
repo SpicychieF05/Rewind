@@ -1,8 +1,16 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
+import { Roboto } from 'next/font/google';
 import '@neondatabase/auth-ui/css';
 import './globals.css';
 import NavBar from '@/components/NavBar';
 import { Providers } from './providers';
+
+const roboto = Roboto({
+  weight: ['300', '400', '500', '700'],
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-roboto',
+});
 
 export const metadata: Metadata = {
   title: 'Rewind — YouTube Channel Search & Saved Library',
@@ -15,21 +23,16 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  themeColor: '#0f0f0f',
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        <link rel="icon" href="/favicon.png" type="image/png" />
-        <link rel="apple-touch-icon" href="/favicon.png" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html lang="en" className={roboto.className} suppressHydrationWarning>
       <body suppressHydrationWarning>
         <Providers>
           <NavBar />

@@ -1,15 +1,24 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import SearchForm, { type SearchFormValues } from '@/components/SearchForm';
+import { Bookmark, MonitorPlay, SearchX, CircleAlert } from 'lucide-react';
+import SearchForm, { type SearchFormValues, type SearchFormPrefill } from '@/components/SearchForm';
 import VideoCard from '@/components/VideoCard';
 import VideoPlayer from '@/components/VideoPlayer';
 import QuotaBanner from '@/components/QuotaBanner';
 import LoadMoreButton from '@/components/LoadMoreButton';
 import SignInPromptModal from '@/components/SignInPromptModal';
+import PlaylistPicker from '@/components/PlaylistPicker';
 import type { VideoResult } from '@/lib/youtube';
+import type { Timeline } from '@/lib/timeline';
+import { formatTimeline } from '@/lib/timeline';
 import { authClient } from '@/lib/auth/client';
+import { useToast } from '@/components/ui/ToastProvider';
+import Button from '@/components/ui/Button';
+import Icon from '@/components/ui/Icon';
+import EmptyState from '@/components/ui/EmptyState';
+import Chip from '@/components/ui/Chip';
 
 interface ChannelMeta {
   channelId: string;
@@ -32,18 +41,39 @@ interface SearchState {
   currentFormValues: SearchFormValues | null;
 }
 
+interface RecentSearchItem {
+  channelInput: string;
+  query: string;
+  matchMode: 'exact' | 'contains';
+  timeline: Timeline;
+  timestamp: number;
+}
+
+const RECENT_SEARCHES_KEY = 'rewind.recentSearches.v1';
+
 function HomePage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const initialQuery = searchParams.get('q') ?? '';
+  const { showToast } = useToast();
 
   const { data: session } = authClient.useSession();
   const isAuthenticated = !!session?.user;
-  const [signInPromptOpen, setSignInPromptOpen] = useState(false);
 
+  const [signInPromptOpen, setSignInPromptOpen] = useState(false);
+  const [playlistPickerVideo, setPlaylistPickerVideo] = useState<VideoResult | null>(null);
+
+  // Saved states
   const [savedVideoIds, setSavedVideoIds] = useState<Set<string>>(new Set());
+  const [savedChannelIds, setSavedChannelIds] = useState<Set<string>>(new Set());
   const [savedVideos, setSavedVideos] = useState<VideoResult[]>([]);
   const [activeVideo, setActiveVideo] = useState<VideoResult | null>(null);
+
+  // Form prefill state (for Example chips or Recent searches)
+  const [formPrefill, setFormPrefill] = useState<SearchFormPrefill | null>(null);
+  const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>([]);
+
+  // Search state
   const [state, setState] = useState<SearchState>({
     channelMeta: null,
     videos: [],
@@ -58,46 +88,106 @@ function HomePage() {
     currentFormValues: null,
   });
 
-  // Load saved video IDs for authenticated user; keep empty for unauthenticated visitors
+  // Load recent searches from localStorage on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(RECENT_SEARCHES_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const timer = setTimeout(() => setRecentSearches(parsed.slice(0, 5)), 0);
+          return () => clearTimeout(timer);
+        }
+      }
+    } catch {}
+  }, []);
+
+  // Save to recent searches
+  const addRecentSearch = (values: SearchFormValues) => {
+    try {
+      setRecentSearches((prev) => {
+        const filtered = prev.filter(
+          (s) =>
+            !(
+              s.channelInput.toLowerCase() === values.channelInput.toLowerCase() &&
+              s.query.toLowerCase() === values.query.toLowerCase()
+            )
+        );
+        const next: RecentSearchItem[] = [
+          {
+            channelInput: values.channelInput,
+            query: values.query,
+            matchMode: values.matchMode,
+            timeline: values.timeline,
+            timestamp: Date.now(),
+          },
+          ...filtered,
+        ].slice(0, 5);
+        localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
+        return next;
+      });
+    } catch {}
+  };
+
+  const clearRecentSearches = () => {
+    try {
+      localStorage.removeItem(RECENT_SEARCHES_KEY);
+      setRecentSearches([]);
+      showToast('Recent searches cleared', 'info');
+    } catch {}
+  };
+
+  // Load saved videos and channels for authenticated user
   useEffect(() => {
     if (!isAuthenticated) {
       const timer = setTimeout(() => {
         setSavedVideoIds(new Set());
+        setSavedChannelIds(new Set());
         setSavedVideos([]);
       }, 0);
       return () => clearTimeout(timer);
     }
 
+    // Fetch saved videos
     type DbRow = {
       video_id: string; title: string; channel_id: string; channel_name: string;
       channel_logo: string; thumbnail: string; published_at: string;
       views: number | null; likes: number | null;
     };
     fetch('/api/videos')
-      .then((r) => {
-        if (!r.ok) return [];
-        return r.json();
-      })
+      .then((r) => (r.ok ? r.json() : []))
       .then((rows: DbRow[]) => {
         if (!Array.isArray(rows)) return;
         setSavedVideoIds(new Set(rows.map((r) => r.video_id)));
-        setSavedVideos(rows.map((r) => ({
-          videoId:     r.video_id,
-          title:       r.title ?? 'Untitled Video',
-          channelId:   r.channel_id ?? '',
-          channelName: r.channel_name ?? '',
-          channelLogo: r.channel_logo ?? '',
-          thumbnail:   r.thumbnail ?? '',
-          publishedAt: r.published_at ?? '',
-          views:       r.views != null ? Number(r.views) : null,
-          likes:       r.likes != null ? Number(r.likes) : null,
-          duration:    null,
-        })));
+        setSavedVideos(
+          rows.map((r) => ({
+            videoId: r.video_id,
+            title: r.title ?? 'Untitled Video',
+            channelId: r.channel_id ?? '',
+            channelName: r.channel_name ?? '',
+            channelLogo: r.channel_logo ?? '',
+            thumbnail: r.thumbnail ?? '',
+            publishedAt: r.published_at ?? '',
+            views: r.views != null ? Number(r.views) : null,
+            likes: r.likes != null ? Number(r.likes) : null,
+            duration: null,
+          }))
+        );
+      })
+      .catch(() => {});
+
+    // Fetch saved channels
+    fetch('/api/channels')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: { channel_id: string }[]) => {
+        if (Array.isArray(rows)) {
+          setSavedChannelIds(new Set(rows.map((r) => r.channel_id)));
+        }
       })
       .catch(() => {});
   }, [isAuthenticated]);
 
-  // ── Core search ──────────────────────────────────────────────────────────
+  // ── Core search execution ──────────────────────────────────────────────────
 
   const doSearch = useCallback(async (values: SearchFormValues, pageToken = '') => {
     const isLoadMore = !!pageToken;
@@ -111,7 +201,7 @@ function HomePage() {
     }));
 
     try {
-      // Step 1: resolve channel
+      // Step 1: Resolve channel
       let channelMeta = state.channelMeta;
       if (!isLoadMore || !channelMeta) {
         const resolveRes = await fetch(
@@ -131,16 +221,25 @@ function HomePage() {
         channelMeta = resolveData as ChannelMeta;
       }
 
-      // Step 2: search videos
+      // Step 2: Build search params (Range vs Date mode)
       const params = new URLSearchParams({
-        channelId:   channelMeta.channelId,
+        channelId: channelMeta.channelId,
         channelName: channelMeta.name,
         channelLogo: channelMeta.logo ?? '',
-        query:       values.query,
-        matchMode:   values.matchMode,
-        timeframe:   values.timeframe,
+        query: values.query,
+        matchMode: values.matchMode,
         ...(pageToken ? { pageToken } : {}),
       });
+
+      if (values.timeline.kind === 'range') {
+        params.set('timeframe', values.timeline.preset);
+      } else {
+        params.set('date', values.timeline.date);
+        // Pass local timezone offset in minutes (per PRD §7.6)
+        const [y, m, d] = values.timeline.date.split('-').map(Number);
+        const tzOffset = new Date(y, m - 1, d).getTimezoneOffset();
+        params.set('tzOffset', tzOffset.toString());
+      }
 
       const searchRes = await fetch(`/api/search?${params}`);
       const data = await searchRes.json();
@@ -170,6 +269,11 @@ function HomePage() {
         return;
       }
 
+      // Save to recent searches on success
+      if (!isLoadMore) {
+        addRecentSearch(values);
+      }
+
       setState((prev) => ({
         ...prev,
         channelMeta,
@@ -195,10 +299,11 @@ function HomePage() {
   }, [state.channelMeta]);
 
   const handleSearch = (values: SearchFormValues) => {
-    // Reset between searches
     setState((prev) => ({ ...prev, channelMeta: null, videos: [], nextPageToken: null }));
     doSearch(values);
-    router.push(`/?q=${encodeURIComponent(values.query)}`, { scroll: false });
+    if (values.query) {
+      router.push(`/?q=${encodeURIComponent(values.query)}`, { scroll: false });
+    }
   };
 
   const handleLoadMore = () => {
@@ -206,9 +311,9 @@ function HomePage() {
     doSearch(state.currentFormValues, state.nextPageToken);
   };
 
-  // ── Save/unsave ───────────────────────────────────────────────────────────
+  // ── Save & Unsave Videos ───────────────────────────────────────────────────
 
-  const handleSave = async (video: VideoResult) => {
+  const handleSaveVideo = async (video: VideoResult) => {
     if (!isAuthenticated) {
       setSignInPromptOpen(true);
       return;
@@ -219,9 +324,10 @@ function HomePage() {
       body: JSON.stringify(video),
     });
     setSavedVideoIds((prev) => new Set([...prev, video.videoId]));
+    showToast(`Saved "${video.title}" to library`, 'success');
   };
 
-  const handleUnsave = async (videoId: string) => {
+  const handleUnsaveVideo = async (videoId: string) => {
     if (!isAuthenticated) {
       setSignInPromptOpen(true);
       return;
@@ -232,57 +338,105 @@ function HomePage() {
       next.delete(videoId);
       return next;
     });
+    showToast('Video removed from saved library', 'info');
+  };
+
+  // ── Save & Unsave Channels (PRD §9.3 & User Q1) ───────────────────────────
+
+  const isChannelSaved = state.channelMeta ? savedChannelIds.has(state.channelMeta.channelId) : false;
+
+  const handleChannelSaveToggle = async () => {
+    if (!state.channelMeta) return;
+    if (!isAuthenticated) {
+      setSignInPromptOpen(true);
+      return;
+    }
+
+    const { channelId, name, logo, subscriberCount } = state.channelMeta;
+
+    if (isChannelSaved) {
+      await fetch(`/api/channels?channelId=${channelId}`, { method: 'DELETE' });
+      setSavedChannelIds((prev) => {
+        const next = new Set(prev);
+        next.delete(channelId);
+        return next;
+      });
+      showToast(`Removed "${name}" from saved channels`, 'info');
+    } else {
+      await fetch('/api/channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channelId, name, logo, subscriberCount }),
+      });
+      setSavedChannelIds((prev) => new Set([...prev, channelId]));
+      showToast(`Saved "${name}" to your channels`, 'success');
+    }
   };
 
   return (
-    <div className="container" style={{ paddingTop: 'var(--space-5)', paddingBottom: 'var(--space-12)' }} suppressHydrationWarning>
-      {/* SEO heading */}
+    <div className="container home-container" suppressHydrationWarning>
       <h1 className="sr-only">Rewind — YouTube Channel Search Tool</h1>
 
-      {/* Quota banner */}
+      {/* Quota Banner */}
       {(state.quotaUsed > 0 || state.quotaExceeded) && (
-        <QuotaBanner
-          quotaUsed={state.quotaUsed}
-          exceeded={state.quotaExceeded}
-        />
+        <QuotaBanner quotaUsed={state.quotaUsed} exceeded={state.quotaExceeded} />
       )}
 
-      {/* Search form */}
+      {/* Main Search Form */}
       <SearchForm
         onSearch={handleSearch}
         loading={state.loading}
         initialQuery={initialQuery}
+        hasSearched={state.hasSearched}
+        prefill={formPrefill}
       />
 
-      {/* Channel header */}
+      {/* Resolved Channel Header with Save Channel button (§9.3) */}
       {state.channelMeta && !state.loading && (
         <div id="channel-header" className="channel-header" aria-label={`Results from ${state.channelMeta.name}`}>
-          {state.channelMeta.logo && (
+          {state.channelMeta.logo ? (
             <img
               src={state.channelMeta.logo}
               alt={state.channelMeta.name}
-              className="channel-header-logo"
+              className="channel-logo-img"
               width={48}
               height={48}
             />
+          ) : (
+            <div className="channel-logo-placeholder">
+              {state.channelMeta.name.charAt(0).toUpperCase()}
+            </div>
           )}
-          <div>
-            <h2 className="channel-header-name">{state.channelMeta.name}</h2>
+
+          <div className="channel-header-info">
+            <h2 className="channel-header-title">{state.channelMeta.name}</h2>
             {state.channelMeta.subscriberCount != null && (
-              <p className="channel-header-subs text-secondary text-sm">
+              <p className="channel-header-subs">
                 {formatSubs(state.channelMeta.subscriberCount)}
               </p>
             )}
           </div>
-          <span className="channel-header-count text-muted text-sm">
-            {state.videos.length} result{state.videos.length !== 1 ? 's' : ''}
-          </span>
+
+          <div className="channel-header-actions">
+            <Button
+              tier={isChannelSaved ? 'secondary' : 'accent'}
+              size="sm"
+              onClick={handleChannelSaveToggle}
+              icon={<Icon as={Bookmark} size={14} anim="pop" style={{ fill: isChannelSaved ? 'currentColor' : 'none' }} />}
+            >
+              {isChannelSaved ? 'Saved' : 'Save Channel'}
+            </Button>
+
+            <span className="channel-result-count tabular-nums">
+              {state.videos.length} video{state.videos.length !== 1 ? 's' : ''}
+            </span>
+          </div>
         </div>
       )}
 
-      {/* Loading skeleton */}
+      {/* Loading Skeletons */}
       {state.loading && (
-        <div className="video-grid" aria-busy="true" aria-label="Loading results">
+        <div className="video-grid" aria-busy="true" aria-label="Loading search results">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="skeleton-card" aria-hidden="true">
               <div className="skeleton skeleton-thumb" />
@@ -298,25 +452,38 @@ function HomePage() {
         </div>
       )}
 
-      {/* Error state */}
+      {/* Error state with Retry */}
       {state.error && !state.loading && (
-        <div id="search-error" className="empty-state" role="alert" aria-live="assertive">
-          <ErrorIcon />
-          <h3>Something went wrong</h3>
-          <p>{state.error}</p>
-        </div>
+        <EmptyState
+          icon={CircleAlert}
+          title="Search Failed"
+          description={state.error}
+          role="alert"
+          aria-live="assertive"
+          actions={
+            state.currentFormValues && (
+              <Button
+                tier="accent"
+                onClick={() => state.currentFormValues && doSearch(state.currentFormValues)}
+              >
+                Retry Search
+              </Button>
+            )
+          }
+        />
       )}
 
-      {/* Quota exceeded */}
+      {/* Quota Exceeded */}
       {state.quotaExceeded && !state.loading && (
-        <div id="quota-exceeded-msg" className="empty-state" role="alert">
-          <QuotaIcon />
-          <h3>API Quota Exceeded</h3>
-          <p>YouTube search quota is exhausted for today. It resets at midnight PST. Your saved library is still available.</p>
-        </div>
+        <EmptyState
+          icon={CircleAlert}
+          title="API Quota Exceeded"
+          description="YouTube search quota is exhausted for today. It resets at midnight PST. Your saved library and playlists remain fully available."
+          role="alert"
+        />
       )}
 
-      {/* Results grid */}
+      {/* Results Grid */}
       {!state.loading && !state.error && !state.quotaExceeded && state.videos.length > 0 && (
         <>
           <div
@@ -332,13 +499,16 @@ function HomePage() {
                   isSaved={savedVideoIds.has(video.videoId)}
                   isAuthenticated={isAuthenticated}
                   onPromptSignIn={() => setSignInPromptOpen(true)}
-                  onSave={handleSave}
-                  onUnsave={handleUnsave}
+                  onSave={handleSaveVideo}
+                  onUnsave={handleUnsaveVideo}
+                  onAddToPlaylist={(vid) => setPlaylistPickerVideo(vid)}
+                  showAddToPlaylist={true}
                   onPlay={setActiveVideo}
                 />
               </div>
             ))}
           </div>
+
           <LoadMoreButton
             nextPageToken={state.nextPageToken}
             quotaNearLimit={state.quotaNearLimit}
@@ -348,24 +518,108 @@ function HomePage() {
         </>
       )}
 
-      {/* Empty results */}
+      {/* No Results Found State (§9.6) */}
       {!state.loading && !state.error && !state.quotaExceeded && state.hasSearched && state.videos.length === 0 && (
-        <div id="no-results" className="empty-state" role="status">
-          <SearchIcon />
-          <h3>No videos found</h3>
-          <p>Try a different keyword, timeframe, or match mode.</p>
-        </div>
+        <EmptyState
+          icon={SearchX}
+          title="No videos found"
+          description={
+            state.currentFormValues?.timeline.kind === 'date'
+              ? `No videos published on ${formatTimeline(state.currentFormValues.timeline)}.`
+              : `No matching videos published in ${formatTimeline(state.currentFormValues?.timeline ?? null)}.`
+          }
+          actions={
+            <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+              {state.currentFormValues?.query && (
+                <Button
+                  tier="secondary"
+                  size="sm"
+                  onClick={() => {
+                    if (state.currentFormValues) {
+                      const updated = { ...state.currentFormValues, query: '' };
+                      setFormPrefill(updated);
+                      doSearch(updated);
+                    }
+                  }}
+                >
+                  Clear keyword
+                </Button>
+              )}
+            </div>
+          }
+        />
       )}
 
-      {/* Hero / pre-search state */}
+      {/* Pre-search Hero Prompt with Examples and Recent Searches (§9.6) */}
       {!state.hasSearched && !state.loading && (
-        <div id="hero-prompt" className="hero-prompt" aria-hidden="true" suppressHydrationWarning>
-          <HeroIcon />
-          <p>Enter a channel and a keyword above to search their video history</p>
+        <div className="hero-section">
+          <EmptyState
+            icon={MonitorPlay}
+            rewindBadge
+            compact
+            title="Search a channel's video history"
+            description="Enter any YouTube channel handle or URL, pick a range or exact calendar day, and find videos instantly."
+          />
+
+          {/* Try an Example Chips */}
+          <div className="hero-suggestions">
+            <span className="suggestions-label">Try an example:</span>
+            <div className="chips-row">
+              {[
+                { channel: '@mkbhd', label: 'MKBHD' },
+                { channel: '@veritasium', label: 'Veritasium' },
+                { channel: '@TED', label: 'TED Talks' },
+              ].map((ex) => (
+                <Chip
+                  key={ex.channel}
+                  label={ex.label}
+                  onClick={() => {
+                    // Prefill channel and timeline preset (User Q2)
+                    setFormPrefill({
+                      channelInput: ex.channel,
+                      timeline: { kind: 'range', preset: '1year' },
+                    });
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Recent Searches */}
+          {recentSearches.length > 0 && (
+            <div className="recent-searches-box">
+              <div className="recent-searches-header">
+                <span className="recent-title">Recent searches</span>
+                <button
+                  type="button"
+                  className="recent-clear-btn"
+                  onClick={clearRecentSearches}
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="chips-row">
+                {recentSearches.map((item, idx) => (
+                  <Chip
+                    key={`${item.channelInput}-${item.query}-${idx}`}
+                    label={`${item.channelInput}${item.query ? ` · "${item.query}"` : ''} · ${formatTimeline(item.timeline)}`}
+                    onClick={() => {
+                      setFormPrefill({
+                        channelInput: item.channelInput,
+                        query: item.query,
+                        matchMode: item.matchMode,
+                        timeline: item.timeline,
+                      });
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* In-app video player overlay */}
+      {/* Video Player In-App Overlay */}
       {activeVideo && (
         <VideoPlayer
           videoId={activeVideo.videoId}
@@ -374,79 +628,182 @@ function HomePage() {
         />
       )}
 
-      {/* Sign-in prompt modal */}
+      {/* Sign-in Prompt Modal */}
       <SignInPromptModal
         isOpen={signInPromptOpen}
         onClose={() => setSignInPromptOpen(false)}
       />
 
+      {/* Playlist Picker Modal (Home Cards) */}
+      {playlistPickerVideo && (
+        <PlaylistPicker
+          video={playlistPickerVideo}
+          playlists={[]}
+          onClose={() => setPlaylistPickerVideo(null)}
+        />
+      )}
+
       <style jsx>{`
+        .home-container {
+          padding-top: var(--space-4);
+          padding-bottom: var(--space-12);
+        }
+
+        /* Channel Header */
         .channel-header {
           display: flex;
           align-items: center;
           gap: var(--space-3);
-          padding: var(--space-4) 0;
-          border-bottom: 1px solid var(--border-subtle);
-          margin-bottom: var(--space-2);
+          padding: var(--space-3) var(--space-4);
+          background-color: var(--surface-1);
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius-lg);
+          box-shadow: var(--surface-highlight);
+          margin-bottom: var(--space-4);
           flex-wrap: wrap;
         }
-        .channel-header-logo {
+
+        .channel-logo-img {
           border-radius: 50%;
           object-fit: cover;
           width: 48px;
           height: 48px;
           flex-shrink: 0;
         }
-        .channel-header-name {
-          font-size: clamp(var(--text-base), 3vw, var(--text-lg));
+
+        .channel-logo-placeholder {
+          width: 48px;
+          height: 48px;
+          border-radius: 50%;
+          background-color: var(--accent);
+          color: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
           font-weight: 700;
-          word-break: break-word;
-        }
-        .channel-header-count {
-          margin-left: auto;
+          font-size: var(--text-lg);
           flex-shrink: 0;
         }
-        @media (max-width: 480px) {
-          .channel-header-count {
-            width: 100%;
-            margin-left: 0;
-            padding-left: calc(48px + var(--space-3));
-          }
+
+        .channel-header-info {
+          display: flex;
+          flex-direction: column;
+          min-width: 0;
+          flex: 1;
         }
 
-        /* Skeleton loader */
-        .skeleton-card { display: flex; flex-direction: column; gap: var(--space-2); }
-        .skeleton-info { display: flex; gap: var(--space-2); padding: 0 var(--space-1); }
-        .skeleton-lines { flex: 1; display: flex; flex-direction: column; gap: var(--space-2); padding-top: var(--space-1); }
-        .skeleton {
-          background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary) 50%, var(--bg-secondary) 75%);
-          background-size: 200% 100%;
-          animation: shimmer 1.4s infinite;
-          border-radius: var(--radius-sm);
+        .channel-header-title {
+          font-size: clamp(var(--text-base), 2.5vw, var(--text-lg));
+          font-weight: 700;
+          color: var(--text-primary);
+          word-break: break-word;
         }
-        .skeleton-thumb { aspect-ratio: 16/9; width: 100%; border-radius: var(--radius-md); }
-        .skeleton-avatar { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; }
-        .skeleton-line { height: 14px; width: 100%; }
-        .skeleton-line.short { width: 60%; }
-        @keyframes shimmer { to { background-position: -200% 0; } }
 
-        /* Hero prompt */
-        .hero-prompt {
+        .channel-header-subs {
+          font-size: var(--text-xs);
+          color: var(--text-secondary);
+        }
+
+        .channel-header-actions {
+          display: flex;
+          align-items: center;
+          gap: var(--space-3);
+          flex-shrink: 0;
+        }
+
+        .channel-result-count {
+          font-size: var(--text-xs);
+          color: var(--text-muted);
+        }
+
+        /* Hero Suggestions & Recent Searches */
+        .hero-section {
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: var(--space-4);
-          padding: clamp(var(--space-8), 8vw, var(--space-16)) var(--space-4);
-          color: var(--text-muted);
-          text-align: center;
+          gap: var(--space-3);  /* tightened from space-5 to close the gap */
+          width: 100%;
         }
-        .hero-prompt p { font-size: clamp(var(--text-sm), 2.5vw, var(--text-md)); max-width: 420px; }
+
+        .hero-suggestions {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: var(--space-2);
+          width: 100%;
+        }
+
+        .suggestions-label {
+          font-size: var(--text-xs);
+          color: var(--text-muted);
+          font-weight: 500;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .chips-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: var(--space-2);
+          justify-content: center;
+          max-width: 680px;
+        }
+
+        .recent-searches-box {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: var(--space-2);
+          width: 100%;
+          max-width: 680px;
+          padding-top: var(--space-4);
+          border-top: 1px solid var(--border-subtle);
+        }
+
+        .recent-searches-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          width: 100%;
+          padding: 0 var(--space-2);
+        }
+
+        .recent-title {
+          font-size: var(--text-xs);
+          font-weight: 600;
+          color: var(--text-muted);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .recent-clear-btn {
+          font-size: var(--text-xs);
+          color: var(--text-secondary);
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          transition: color var(--transition-fast);
+        }
+        .recent-clear-btn:hover {
+          color: var(--accent);
+        }
+
+        @media (max-width: 540px) {
+          .channel-header {
+            gap: var(--space-2);
+          }
+          .channel-header-actions {
+            width: 100%;
+            justify-content: space-between;
+            padding-top: var(--space-2);
+            border-top: 1px solid var(--border-subtle);
+          }
+        }
       `}</style>
     </div>
   );
 }
 
-// Wrapped in Suspense because useSearchParams requires it in Next.js App Router
 export default function Page() {
   return (
     <Suspense>
@@ -459,34 +816,4 @@ function formatSubs(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M subscribers`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K subscribers`;
   return `${n} subscribers`;
-}
-
-function ErrorIcon() {
-  return (
-    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{ color: 'var(--error)' }} aria-hidden="true">
-      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-    </svg>
-  );
-}
-function SearchIcon() {
-  return (
-    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{ color: 'var(--text-muted)' }} aria-hidden="true">
-      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-    </svg>
-  );
-}
-function QuotaIcon() {
-  return (
-    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{ color: 'var(--warning)' }} aria-hidden="true">
-      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-    </svg>
-  );
-}
-function HeroIcon() {
-  return (
-    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
-      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-      <line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
-    </svg>
-  );
 }

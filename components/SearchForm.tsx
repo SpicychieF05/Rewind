@@ -1,334 +1,479 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { Search, RotateCcw, Info, Pencil } from 'lucide-react';
+import type { Timeline } from '@/lib/timeline';
+import { formatTimeline } from '@/lib/timeline';
+import TimelinePicker from './TimelinePicker';
+import SegmentedControl from './ui/SegmentedControl';
+import Button from './ui/Button';
+import IconButton from './ui/IconButton';
+import Icon from './ui/Icon';
+import { useAvailableSpace } from '@/hooks/useAvailableSpace';
 
 export type MatchMode = 'exact' | 'contains';
-export type Timeframe =
-  | '1month' | '2months' | '3months' | '6months' | '12months'
-  | '1year' | '2years' | '3years' | '4years' | '5years';
 
 export interface SearchFormValues {
   channelInput: string;
   query: string;
   matchMode: MatchMode;
-  timeframe: Timeframe;
+  timeline: Timeline;
+}
+
+export interface SearchFormPrefill {
+  channelInput?: string;
+  query?: string;
+  matchMode?: MatchMode;
+  timeline?: Timeline;
 }
 
 interface Props {
   onSearch: (values: SearchFormValues) => void;
   loading: boolean;
   initialQuery?: string;
+  hasSearched?: boolean;
+  prefill?: SearchFormPrefill | null;
 }
 
-const TIMEFRAME_OPTIONS: { value: Timeframe; label: string }[] = [
-  { value: '1month',  label: 'Last 1 month'  },
-  { value: '2months', label: 'Last 2 months' },
-  { value: '3months', label: 'Last 3 months' },
-  { value: '6months', label: 'Last 6 months' },
-  { value: '12months',label: 'Last 12 months'},
-  { value: '1year',   label: 'Last 1 year'   },
-  { value: '2years',  label: 'Last 2 years'  },
-  { value: '3years',  label: 'Last 3 years'  },
-  { value: '4years',  label: 'Last 4 years'  },
-  { value: '5years',  label: 'Last 5 years'  },
-];
-
-export default function SearchForm({ onSearch, loading, initialQuery = '' }: Props) {
+export default function SearchForm({
+  onSearch,
+  loading,
+  initialQuery = '',
+  hasSearched = false,
+  prefill,
+}: Props) {
   const router = useRouter();
+  const space = useAvailableSpace();
+
   const [channelInput, setChannelInput] = useState('');
   const [query, setQuery] = useState(initialQuery);
   const [matchMode, setMatchMode] = useState<MatchMode>('contains');
-  const [timeframe, setTimeframe] = useState<Timeframe>('1year');
+  const [timeline, setTimeline] = useState<Timeline | null>(null);
+
+  // Validation feedback
+  const [showValidationHint, setShowValidationHint] = useState(false);
+  const [channelError, setChannelError] = useState(false);
+  const [timelineError, setTimelineError] = useState(false);
+
+  // Collapsed state on compact viewports after search
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  const channelInputRef = useRef<HTMLInputElement>(null);
+  const searchBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Collapse automatically on compact screen after search succeeds
+  useEffect(() => {
+    if (hasSearched && (space.isCompactWidth || space.isCompactHeight)) {
+      const timer = setTimeout(() => setIsCollapsed(true), 0);
+      return () => clearTimeout(timer);
+    }
+  }, [hasSearched, space.isCompactWidth, space.isCompactHeight]);
+
+  // Handle prefill updates (e.g. from Example chips or Recent searches)
+  useEffect(() => {
+    if (!prefill) return;
+    const timer = setTimeout(() => {
+      if (prefill.channelInput !== undefined) setChannelInput(prefill.channelInput);
+      if (prefill.query !== undefined) setQuery(prefill.query);
+      if (prefill.matchMode !== undefined) setMatchMode(prefill.matchMode);
+      if (prefill.timeline !== undefined) setTimeline(prefill.timeline);
+      setIsCollapsed(false);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [prefill]);
+
+  const canSearch = channelInput.trim() !== '' && timeline !== null;
+  const isDirty = channelInput.trim() !== '' || query.trim() !== '' || timeline !== null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!channelInput.trim()) return;
-    onSearch({ channelInput: channelInput.trim(), query: query.trim(), matchMode, timeframe });
+
+    if (!channelInput.trim()) {
+      setChannelError(true);
+      channelInputRef.current?.focus();
+      return;
+    }
+    setChannelError(false);
+
+    if (!timeline) {
+      setTimelineError(true);
+      setShowValidationHint(true);
+      return;
+    }
+    setTimelineError(false);
+    setShowValidationHint(false);
+
+    onSearch({
+      channelInput: channelInput.trim(),
+      query: query.trim(),
+      matchMode,
+      timeline,
+    });
   };
 
   const handleReset = () => {
     setChannelInput('');
     setQuery('');
     setMatchMode('contains');
-    setTimeframe('1year');
+    setTimeline(null);
+    setChannelError(false);
+    setTimelineError(false);
+    setShowValidationHint(false);
+    setIsCollapsed(false);
     router.push('/');
   };
 
-  const isDirty = channelInput.trim() !== '' || query.trim() !== '';
+  const handleEditSearch = () => {
+    setIsCollapsed(false);
+    setTimeout(() => channelInputRef.current?.focus(), 50);
+  };
+
+  // Summary bar collapsed view on compact screens (§9.2)
+  if (isCollapsed && hasSearched) {
+    return (
+      <div className="search-summary-card">
+        <div className="summary-info">
+          <span className="summary-channel truncate">
+            {channelInput.startsWith('@') ? channelInput : `@${channelInput}`}
+          </span>
+          {query.trim() && <span className="summary-query truncate">&ldquo;{query.trim()}&rdquo;</span>}
+          {timeline && <span className="summary-timeline">{formatTimeline(timeline)}</span>}
+        </div>
+
+        <div className="summary-actions">
+          <Button
+            tier="secondary"
+            size="sm"
+            onClick={handleEditSearch}
+            icon={<Icon as={Pencil} size={14} />}
+            aria-label="Edit search parameters"
+          >
+            Edit
+          </Button>
+          <IconButton
+            size="sm"
+            onClick={handleReset}
+            aria-label="Clear search and reset"
+            tooltip="Reset search"
+          >
+            <Icon as={RotateCcw} size={14} anim="spin-once" />
+          </IconButton>
+        </div>
+
+        <style jsx>{`
+          .search-summary-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: var(--space-2);
+            padding: var(--space-2) var(--space-3);
+            background-color: var(--surface-1);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--surface-highlight);
+            margin-bottom: var(--space-3);
+          }
+          .summary-info {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            min-width: 0;
+            flex: 1;
+            font-size: var(--text-xs);
+          }
+          .summary-channel {
+            font-weight: 600;
+            color: var(--text-primary);
+          }
+          .summary-query {
+            color: var(--text-secondary);
+          }
+          .summary-timeline {
+            color: var(--accent);
+            background-color: var(--accent-subtle);
+            padding: 2px 6px;
+            border-radius: var(--radius-sm);
+            white-space: nowrap;
+          }
+          .summary-actions {
+            display: flex;
+            align-items: center;
+            gap: var(--space-1);
+            flex-shrink: 0;
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
-    <form
-      id="search-form"
-      onSubmit={handleSubmit}
-      className="search-form"
-      aria-label="Video search form"
-      suppressHydrationWarning
-    >
-      {/* Primary inputs group */}
-      <div className="search-row-primary">
-        {/* Channel input */}
-        <div className="search-field" suppressHydrationWarning>
-          <label htmlFor="channel-input" className="search-label">Channel</label>
-          <input
-            id="channel-input"
-            type="text"
-            className="input"
-            placeholder="Channel handle, URL, or video URL"
-            value={channelInput}
-            onChange={(e) => setChannelInput(e.target.value)}
-            required
-            aria-required="true"
-            disabled={loading}
-          />
-        </div>
-
-        {/* Keyword */}
-        <div className="search-field" suppressHydrationWarning>
-          <label htmlFor="keyword-input" className="search-label">Keyword</label>
-          <input
-            id="keyword-input"
-            type="text"
-            className="input"
-            placeholder="Video title or keyword (optional)"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            disabled={loading}
-          />
-        </div>
-      </div>
-
-      {/* Filter options + actions group */}
-      <div className="search-row-secondary">
-        {/* Match mode */}
-        <div className="search-field search-field-narrow" suppressHydrationWarning>
-          <span className="search-label" id="match-mode-label">Match</span>
-          <div
-            className="match-toggle"
-            role="group"
-            aria-labelledby="match-mode-label"
-            suppressHydrationWarning
-          >
-            <button
-              type="button"
-              id="match-contains"
-              className={`match-btn ${matchMode === 'contains' ? 'active' : ''}`}
-              onClick={() => setMatchMode('contains')}
-              aria-pressed={matchMode === 'contains'}
+    <div className="search-form-card" suppressHydrationWarning>
+      <form
+        id="search-form"
+        onSubmit={handleSubmit}
+        className="search-form"
+        aria-label="Video search form"
+      >
+        <div className="search-container-inner" suppressHydrationWarning>
+          {/* Channel field (Required) */}
+          <div className="search-col field-channel">
+            <label htmlFor="channel-input" className="field-label">
+              Channel <span style={{ color: 'var(--accent)' }}>*</span>
+            </label>
+            <input
+              ref={channelInputRef}
+              id="channel-input"
+              type="text"
+              className={`input ${channelError ? 'input-error' : ''}`}
+              placeholder="Channel handle (@mkbhd) or URL"
+              value={channelInput}
+              onChange={(e) => {
+                setChannelInput(e.target.value);
+                if (channelError) setChannelError(false);
+              }}
+              required
+              aria-required="true"
               disabled={loading}
-            >
-              Contains
-            </button>
-            <button
-              type="button"
-              id="match-exact"
-              className={`match-btn ${matchMode === 'exact' ? 'active' : ''}`}
-              onClick={() => setMatchMode('exact')}
-              aria-pressed={matchMode === 'exact'}
-              disabled={loading}
-            >
-              Exact
-            </button>
+            />
           </div>
-        </div>
 
-        {/* Timeframe */}
-        <div className="search-field search-field-narrow" suppressHydrationWarning>
-          <label htmlFor="timeframe-select" className="search-label">Timeframe</label>
-          <select
-            id="timeframe-select"
-            className="input select"
-            value={timeframe}
-            onChange={(e) => setTimeframe(e.target.value as Timeframe)}
-            disabled={loading}
-            aria-label="Select timeframe"
-          >
-            {TIMEFRAME_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </div>
+          {/* Keyword field (Optional) */}
+          <div className="search-col field-keyword">
+            <label htmlFor="keyword-input" className="field-label">
+              Keyword
+            </label>
+            <input
+              id="keyword-input"
+              type="text"
+              className="input"
+              placeholder="Video title keyword (optional)"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              disabled={loading}
+            />
+          </div>
 
-        {/* Submit + Reset Actions */}
-        <div className="search-field search-field-actions" suppressHydrationWarning>
-          <span className="search-label search-label-placeholder" aria-hidden="true">&nbsp;</span>
-          <div className="search-actions-wrap">
-            <button
-              id="search-submit-btn"
-              type="submit"
-              className="btn btn-primary search-submit"
-              disabled={loading || !channelInput.trim()}
-              aria-busy={loading}
-            >
-              {loading ? <><span className="spinner" aria-hidden="true" /> Searching…</> : 'Search'}
-            </button>
-            {isDirty && !loading && (
-              <button
-                id="search-reset-btn"
-                type="button"
-                className="btn btn-ghost search-reset"
-                onClick={handleReset}
-                aria-label="Clear search and reset page"
-                title="Clear all fields and reload"
+          {/* Match Mode Segmented Control */}
+          <div className="search-col field-match">
+            <span className="field-label" id="match-mode-label">
+              Match
+            </span>
+            <SegmentedControl
+              options={[
+                { value: 'contains', label: 'Contains' },
+                { value: 'exact', label: 'Exact' },
+              ]}
+              value={matchMode}
+              onChange={(v) => setMatchMode(v)}
+              aria-label="Match mode"
+              disabled={loading}
+              fullWidth
+            />
+          </div>
+
+          {/* Timeline Picker (Required, No default) */}
+          <div className="search-col field-timeline">
+            <label htmlFor="timeline-picker" className="field-label">
+              Timeline <span style={{ color: 'var(--accent)' }}>*</span>
+            </label>
+            <TimelinePicker
+              id="timeline-picker"
+              value={timeline}
+              onChange={(tl) => {
+                setTimeline(tl);
+                if (timelineError) setTimelineError(false);
+                if (showValidationHint) setShowValidationHint(false);
+              }}
+              disabled={loading}
+              hasError={timelineError}
+            />
+          </div>
+
+          {/* Submit & Reset actions */}
+          <div className="search-col field-actions">
+            <span className="field-label label-spacer" aria-hidden="true">
+              &nbsp;
+            </span>
+            <div className="actions-cluster">
+              <Button
+                ref={searchBtnRef}
+                type="submit"
+                id="search-submit-btn"
+                tier="accent"
+                loading={loading}
+                aria-disabled={!canSearch && !loading}
+                icon={<Icon as={Search} size={16} anim="wiggle" />}
+                className={`search-submit-btn ${!canSearch ? 'cta-disabled' : ''}`}
+                pill={false}
               >
-                <ResetIcon />
-                <span>Reset</span>
-              </button>
-            )}
+                {loading ? 'Searching…' : 'Search'}
+              </Button>
+
+              {isDirty && !loading && (
+                <IconButton
+                  type="button"
+                  id="search-reset-btn"
+                  onClick={handleReset}
+                  aria-label="Reset search form"
+                  tooltip="Clear all fields"
+                  className="search-reset-btn"
+                >
+                  <Icon as={RotateCcw} size={16} anim="spin-once" />
+                </IconButton>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+
+        {/* Validation hint / feedback when button is disabled or clicked without required values */}
+        {(!canSearch || showValidationHint) && !loading && (
+          <div className="search-hint" role="status">
+            <Icon as={Info} size={14} />
+            <span>
+              {!channelInput.trim() && !timeline
+                ? 'Add a channel and choose a timeline to search.'
+                : !channelInput.trim()
+                ? 'Enter a channel handle or URL to search.'
+                : 'Select a timeline (Range or Date) to search.'}
+            </span>
+          </div>
+        )}
+      </form>
 
       <style jsx>{`
+        .search-form-card {
+          background-color: var(--surface-1);
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius-lg);
+          box-shadow: var(--surface-highlight);
+          padding: var(--space-4);
+          margin-bottom: var(--space-4);
+          container-type: inline-size;
+          container-name: search-container;
+        }
+
         .search-form {
           display: flex;
           flex-direction: column;
-          gap: var(--space-3);
-          padding: var(--space-4) 0;
+          gap: var(--space-2);
+          width: 100%;
         }
-        .search-row-primary {
+
+        .search-container-inner {
           display: flex;
           gap: var(--space-3);
-          flex-wrap: wrap;
-        }
-        .search-row-secondary {
-          display: flex;
-          gap: var(--space-3);
-          flex-wrap: wrap;
           align-items: flex-end;
+          flex-wrap: wrap;
+          width: 100%;
         }
-        .search-field {
+
+        .search-col {
           display: flex;
           flex-direction: column;
-          gap: var(--space-1);
-          flex: 1;
-          min-width: min(100%, 220px);
+          min-width: 0;
         }
-        .search-field-narrow {
-          flex: 1;
-          min-width: min(100%, 140px);
+
+        .field-channel {
+          flex: 2 1 200px;
         }
-        .search-field-actions {
-          flex: 1;
-          min-width: min(100%, 180px);
+
+        .field-keyword {
+          flex: 2 1 180px;
         }
-        .search-label {
-          font-size: var(--text-xs);
-          font-weight: 500;
-          color: var(--text-secondary);
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
+
+        .field-match {
+          flex: 1 1 140px;
         }
-        .search-label-placeholder {
+
+        .field-timeline {
+          flex: 2 1 180px;
+        }
+
+        .field-actions {
+          flex: 1 1 130px;
+        }
+
+        .label-spacer {
           user-select: none;
         }
-        .match-toggle {
-          display: flex;
-          border: 1px solid var(--border);
-          border-radius: var(--radius-sm);
-          overflow: hidden;
-          height: 38px;
-        }
-        .match-btn {
-          flex: 1;
-          font-size: var(--text-sm);
-          font-weight: 500;
-          color: var(--text-secondary);
-          background: transparent;
-          transition: background-color var(--transition-fast), color var(--transition-fast);
-          padding: 0 var(--space-3);
+
+        .actions-cluster {
           display: flex;
           align-items: center;
-          justify-content: center;
-        }
-        .match-btn:hover { background-color: var(--bg-secondary); color: var(--text-primary); }
-        .match-btn.active { background-color: var(--bg-secondary); color: var(--text-primary); }
-        .match-btn:first-child { border-right: 1px solid var(--border); }
-        .match-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .search-actions-wrap {
-          display: flex;
           gap: var(--space-2);
-          align-items: center;
+          width: 100%;
         }
-        .search-submit {
-          height: 38px;
-          padding: 0 var(--space-6);
-          border-radius: var(--radius-sm);
-          font-size: var(--text-sm);
-          font-weight: 500;
+
+        :global(.search-submit-btn) {
           flex: 1;
-          justify-content: center;
-        }
-        .search-submit:disabled { opacity: 0.5; cursor: not-allowed; }
-        .search-reset {
-          height: 38px;
-          padding: 0 var(--space-4);
-          border-radius: var(--radius-sm);
-          font-size: var(--text-sm);
-          font-weight: 500;
-          justify-content: center;
+          border-radius: var(--radius-md) !important;
+          height: var(--control-h);
         }
 
-        /* Large screens: combine everything into one horizontal fluid line if room */
-        @media (min-width: 1024px) {
-          .search-form {
-            flex-direction: row;
-            flex-wrap: wrap;
-            align-items: flex-end;
+        :global(.search-submit-btn.cta-disabled) {
+          background-color: rgba(255, 30, 64, 0.18) !important;
+          border: 1px solid var(--accent) !important;
+          color: var(--text-secondary) !important;
+          opacity: 0.8 !important;
+        }
+
+        :global(.search-reset-btn) {
+          border: 1px solid var(--border);
+          border-radius: var(--radius-md) !important;
+          height: var(--control-h);
+          width: var(--control-h);
+        }
+
+        .input-error {
+          border-color: var(--error) !important;
+        }
+
+        .search-hint {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+          font-size: var(--text-xs);
+          color: var(--text-muted);
+          padding-top: var(--space-1);
+        }
+
+        /* ── Container Queries on .search-form-card ── */
+        @container search-container (max-width: 899px) {
+          .field-channel {
+            flex: 1 1 45%;
           }
-          .search-row-primary {
-            flex: 2;
-            min-width: 440px;
+          .field-keyword {
+            flex: 1 1 45%;
           }
-          .search-row-secondary {
-            flex: 2;
-            min-width: 440px;
+          .field-match {
+            flex: 1 1 140px;
+          }
+          .field-timeline {
+            flex: 1 1 180px;
+          }
+          .field-actions {
+            flex: 1 1 140px;
           }
         }
 
-        @media (max-width: 640px) {
-          .search-label-placeholder {
+        @container search-container (max-width: 599px) {
+          .label-spacer {
             display: none;
           }
-          .search-row-primary,
-          .search-row-secondary {
-            flex-direction: column;
-            gap: var(--space-3);
-          }
-          .search-field,
-          .search-field-narrow,
-          .search-field-actions {
-            width: 100%;
-            min-width: 100%;
-          }
-          .search-actions-wrap {
+          .field-channel,
+          .field-keyword,
+          .field-match,
+          .field-timeline,
+          .field-actions {
+            flex: 1 1 100%;
             width: 100%;
           }
-          .search-submit,
-          .search-reset {
-            height: 42px;
-          }
-        }
-
-        @media (pointer: coarse) {
-          .match-toggle,
-          .search-submit,
-          .search-reset,
-          .input {
-            min-height: 44px;
+          .actions-cluster {
+            margin-top: var(--space-1);
           }
         }
       `}</style>
-    </form>
-  );
-}
-
-function ResetIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="1 4 1 10 7 10" />
-      <path d="M3.51 15a9 9 0 1 0 .49-3.5" />
-    </svg>
+    </div>
   );
 }

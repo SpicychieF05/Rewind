@@ -17,7 +17,7 @@ export default async function AuthPage({
   const { path } = await params;
 
   return (
-    <main className="auth-page-wrapper">
+    <main className="auth-page-wrapper rewind-auth">
       <div className="auth-card-wrap">
         <AuthView path={path} />
       </div>

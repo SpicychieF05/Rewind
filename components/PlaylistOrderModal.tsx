@@ -1,7 +1,12 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
+import { GripVertical, ChevronUp, ChevronDown, Play } from 'lucide-react';
 import type { VideoResult } from '@/lib/youtube';
+import Modal from './ui/Modal';
+import Button from './ui/Button';
+import Icon from './ui/Icon';
+import { useToast } from './ui/ToastProvider';
 
 interface PlaylistVideo extends VideoResult {
   position: number;
@@ -16,45 +21,57 @@ interface Props {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  try {
+    return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch {
+    return '';
+  }
 }
 
 export default function PlaylistOrderModal({ playlistName, videos, onSave, onClose, onPlay }: Props) {
+  const { showToast } = useToast();
   const [items, setItems] = useState<PlaylistVideo[]>([...videos].sort((a, b) => a.position - b.position));
   const [saving, setSaving] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
 
   // Drag state
-  const dragIndex = useRef<number | null>(null);
-  const dragOverIndex = useRef<number | null>(null);
-
-  // ── Drag handlers ─────────────────────────────────────────────────────────
+  const dragIndexRef = useRef<number | null>(null);
 
   const handleDragStart = (index: number) => {
-    dragIndex.current = index;
+    dragIndexRef.current = index;
+    setDraggedIndex(index);
   };
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
-    dragOverIndex.current = index;
+    if (dropTargetIndex !== index) {
+      setDropTargetIndex(index);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDropTargetIndex(null);
   };
 
   const handleDrop = useCallback(() => {
-    const from = dragIndex.current;
-    const to = dragOverIndex.current;
-    if (from == null || to == null || from === to) return;
+    const from = dragIndexRef.current;
+    const to = dropTargetIndex;
+    if (from != null && to != null && from !== to) {
+      setItems((prev) => {
+        const next = [...prev];
+        const [moved] = next.splice(from, 1);
+        next.splice(to, 0, moved);
+        return next.map((v, i) => ({ ...v, position: i + 1 }));
+      });
+    }
+    dragIndexRef.current = null;
+    setDraggedIndex(null);
+    setDropTargetIndex(null);
+  }, [dropTargetIndex]);
 
-    setItems((prev) => {
-      const next = [...prev];
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved);
-      return next.map((v, i) => ({ ...v, position: i + 1 }));
-    });
-    dragIndex.current = null;
-    dragOverIndex.current = null;
-  }, []);
-
-  // ── Arrow handlers (Touch & Keyboard friendly) ─────────────────────────────
-
+  // Arrow movements
   const moveUp = (index: number) => {
     if (index === 0) return;
     setItems((prev) => {
@@ -73,209 +90,221 @@ export default function PlaylistOrderModal({ playlistName, videos, onSave, onClo
     });
   };
 
-  // ── Save ────────────────────────────────────────────────────────────────────
-
   const handleSave = async () => {
     setSaving(true);
     try {
       await onSave(items.map((v) => v.videoId));
+      showToast('Playlist order updated', 'success');
+    } catch {
+      showToast('Failed to save order', 'error');
     } finally {
       setSaving(false);
     }
   };
 
-  // ── Keyboard: close on Esc ──────────────────────────────────────────────────
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
-
   return (
-    <div
-      id="order-modal-overlay"
-      className="modal-overlay"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="order-modal-title"
-    >
-      <div className="modal-box order-modal">
-        <div className="modal-header">
-          <h2 id="order-modal-title" className="modal-title">
-            Reorder: <em>{playlistName}</em>
-          </h2>
-          <button
-            id="order-modal-close"
-            className="btn-icon"
-            onClick={onClose}
-            aria-label="Close reorder dialog"
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title={`Reorder: ${playlistName}`}
+      maxWidth={640}
+      footer={
+        <div className="order-footer">
+          <Button tier="ghost" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button
+            tier="accent"
+            onClick={handleSave}
+            loading={saving}
           >
-            <XIcon />
-          </button>
+            Save order
+          </Button>
         </div>
-
+      }
+    >
+      <div className="order-body">
         <p className="order-hint">
           Drag and drop rows or use the arrow buttons to reorder videos.
         </p>
 
         <ul className="order-list" role="list" aria-label="Playlist video order">
-          {items.map((video, index) => (
-            <li
-              key={video.videoId}
-              id={`order-item-${video.videoId}`}
-              className="order-item"
-              draggable={true}
-              onDragStart={() => handleDragStart(index)}
-              onDragOver={(e) => handleDragOver(e, index)}
-              onDrop={handleDrop}
-              aria-label={`Position ${String(index + 1).padStart(2, '0')}: ${video.title}`}
-            >
-              {/* Position number */}
-              <span className="order-num" aria-hidden="true">
-                {String(index + 1).padStart(2, '0')}
-              </span>
+          {items.map((video, index) => {
+            const isDragging = draggedIndex === index;
+            const isDropTarget = dropTargetIndex === index;
 
-              {/* Thumbnail */}
-              <a
-                href={`https://www.youtube.com/watch?v=${video.videoId}`}
-                target={onPlay ? undefined : '_blank'}
-                rel={onPlay ? undefined : 'noopener noreferrer'}
-                className="order-thumb-link"
-                tabIndex={-1}
-                aria-label={onPlay ? `Play ${video.title} in Rewind` : `Watch ${video.title} on YouTube`}
-                onClick={(e) => { if (onPlay) { e.preventDefault(); onPlay(video); } }}
+            return (
+              <li
+                key={video.videoId}
+                id={`order-item-${video.videoId}`}
+                className={`order-item ${isDragging ? 'is-dragging' : ''} ${isDropTarget ? 'is-drop-target' : ''}`}
+                draggable
+                onDragStart={() => handleDragStart(index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragEnd={handleDragEnd}
+                onDrop={handleDrop}
+                aria-label={`Position ${String(index + 1).padStart(2, '0')}: ${video.title}`}
               >
-                {video.thumbnail ? (
-                  <img
-                    src={video.thumbnail}
-                    alt=""
-                    className="order-thumb"
-                    width={80}
-                    height={45}
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="order-thumb-placeholder" aria-hidden="true" />
-                )}
-              </a>
-
-              {/* Title & Date */}
-              <div className="order-info">
-                <span className="order-title line-clamp-2">{video.title}</span>
-                <span className="order-date text-xs text-muted">
-                  {video.publishedAt ? formatDate(video.publishedAt) : ''}
+                {/* Position number */}
+                <span className="order-num" aria-hidden="true">
+                  {String(index + 1).padStart(2, '0')}
                 </span>
-              </div>
 
-              {/* Reorder controls: Drag handle + Accessible Arrows */}
-              <div className="order-controls">
-                <div className="order-arrows" role="group" aria-label={`Move ${video.title}`}>
-                  <button
-                    id={`move-up-${video.videoId}`}
-                    type="button"
-                    className="btn-icon order-arrow-btn"
-                    onClick={() => moveUp(index)}
-                    disabled={index === 0}
-                    aria-label={`Move ${video.title} up`}
-                    title="Move up"
-                  >
-                    <ChevronUpIcon />
-                  </button>
-                  <button
-                    id={`move-down-${video.videoId}`}
-                    type="button"
-                    className="btn-icon order-arrow-btn"
-                    onClick={() => moveDown(index)}
-                    disabled={index === items.length - 1}
-                    aria-label={`Move ${video.title} down`}
-                    title="Move down"
-                  >
-                    <ChevronDownIcon />
-                  </button>
+                {/* Thumbnail */}
+                <div
+                  className="order-thumb-wrap"
+                  onClick={() => onPlay?.(video)}
+                  role={onPlay ? 'button' : undefined}
+                  tabIndex={onPlay ? 0 : -1}
+                  aria-label={onPlay ? `Play ${video.title}` : undefined}
+                >
+                  {video.thumbnail ? (
+                    <img
+                      src={video.thumbnail}
+                      alt=""
+                      className="order-thumb"
+                      width={80}
+                      height={45}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="order-thumb-placeholder" aria-hidden="true" />
+                  )}
+                  {onPlay && (
+                    <span className="order-thumb-play" aria-hidden="true">
+                      <Icon as={Play} size={14} />
+                    </span>
+                  )}
                 </div>
-                <div className="drag-handle" aria-hidden="true" title="Drag to reorder">
-                  <GripIcon />
+
+                {/* Info */}
+                <div className="order-info">
+                  <span className="order-title line-clamp-2">{video.title}</span>
+                  <span className="order-date tabular-nums">
+                    {video.publishedAt ? formatDate(video.publishedAt) : ''}
+                  </span>
                 </div>
-              </div>
-            </li>
-          ))}
+
+                {/* Controls */}
+                <div className="order-controls">
+                  <div className="order-arrows" role="group" aria-label={`Move ${video.title}`}>
+                    <button
+                      id={`move-up-${video.videoId}`}
+                      type="button"
+                      className="order-arrow-btn"
+                      onClick={() => moveUp(index)}
+                      disabled={index === 0}
+                      aria-label={`Move ${video.title} up`}
+                      title="Move up"
+                    >
+                      <Icon as={ChevronUp} size={16} />
+                    </button>
+                    <button
+                      id={`move-down-${video.videoId}`}
+                      type="button"
+                      className="order-arrow-btn"
+                      onClick={() => moveDown(index)}
+                      disabled={index === items.length - 1}
+                      aria-label={`Move ${video.title} down`}
+                      title="Move down"
+                    >
+                      <Icon as={ChevronDown} size={16} />
+                    </button>
+                  </div>
+
+                  <div className="drag-handle" aria-hidden="true" title="Drag to reorder">
+                    <Icon as={GripVertical} size={18} />
+                  </div>
+                </div>
+              </li>
+            );
+          })}
         </ul>
-
-        <div className="modal-footer">
-          <button
-            id="order-cancel-btn"
-            className="btn btn-ghost"
-            onClick={onClose}
-            disabled={saving}
-          >
-            Cancel
-          </button>
-          <button
-            id="order-save-btn"
-            className="btn btn-primary"
-            onClick={handleSave}
-            disabled={saving}
-            aria-busy={saving}
-          >
-            {saving ? <><span className="spinner" aria-hidden="true" /> Saving…</> : 'Save order'}
-          </button>
-        </div>
       </div>
 
       <style jsx>{`
-        .order-modal {
-          max-width: 640px;
-          max-height: min(90dvh, 740px);
+        .order-body {
           display: flex;
           flex-direction: column;
+          gap: var(--space-2);
+          max-height: min(65dvh, 520px);
         }
-        .modal-title { font-size: var(--text-lg); font-weight: 700; }
-        .modal-title em { font-style: normal; color: var(--text-secondary); font-weight: 400; }
         .order-hint {
-          padding: 0 var(--space-4) var(--space-3);
           font-size: var(--text-xs);
           color: var(--text-muted);
+          padding-bottom: var(--space-1);
         }
         .order-list {
           list-style: none;
-          flex: 1;
           overflow-y: auto;
-          -webkit-overflow-scrolling: touch;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          padding-right: 4px;
         }
         .order-item {
           display: flex;
           align-items: center;
           gap: var(--space-3);
-          padding: var(--space-2) var(--space-4);
-          border-top: 1px solid var(--border-subtle);
-          cursor: grab;
-          transition: background-color var(--transition-fast);
+          padding: var(--space-2) var(--space-3);
+          background-color: var(--surface-1);
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius-md);
+          transition: background-color var(--transition-fast), border-color var(--transition-fast), opacity var(--transition-fast);
         }
-        .order-item:hover { background-color: var(--bg-tertiary); }
-        .order-item:first-child { border-top: none; }
+        .order-item:hover {
+          background-color: var(--surface-2);
+          border-color: var(--border);
+        }
+        .order-item.is-dragging {
+          opacity: 0.4;
+        }
+        .order-item.is-drop-target {
+          border-color: var(--accent);
+          background-color: var(--accent-subtle);
+        }
         .order-num {
-          font-size: var(--text-sm);
+          font-size: var(--text-xs);
           font-weight: 700;
           color: var(--text-muted);
-          min-width: 20px;
+          min-width: 22px;
           text-align: center;
           flex-shrink: 0;
         }
-        .order-thumb-link { flex-shrink: 0; display: block; }
-        .order-thumb {
+        .order-thumb-wrap {
+          position: relative;
           width: 72px;
           height: 40px;
-          object-fit: cover;
+          flex-shrink: 0;
           border-radius: var(--radius-sm);
-          background-color: var(--bg-primary);
+          overflow: hidden;
+          background-color: var(--surface-2);
+          cursor: pointer;
+        }
+        .order-thumb {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
         }
         .order-thumb-placeholder {
-          width: 72px;
-          height: 40px;
-          border-radius: var(--radius-sm);
-          background-color: var(--bg-secondary);
+          width: 100%;
+          height: 100%;
+          background-color: var(--surface-3);
+        }
+        .order-thumb-play {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background-color: rgba(0, 0, 0, 0.45);
+          color: #fff;
+          opacity: 0;
+          transition: opacity var(--transition-fast);
+        }
+        .order-thumb-wrap:hover .order-thumb-play {
+          opacity: 1;
         }
         .order-info {
           flex: 1;
@@ -300,29 +329,55 @@ export default function PlaylistOrderModal({ playlistName, videos, onSave, onClo
           gap: var(--space-1);
           flex-shrink: 0;
         }
-        .drag-handle {
-          color: var(--text-muted);
-          cursor: grab;
-          padding: var(--space-1);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .drag-handle:hover {
-          color: var(--text-primary);
-        }
         .order-arrows {
           display: flex;
           flex-direction: column;
           gap: 2px;
-          flex-shrink: 0;
         }
         .order-arrow-btn {
-          width: 32px;
-          height: 32px;
+          width: 28px;
+          height: 28px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: var(--radius-sm);
+          background: transparent;
+          border: 1px solid var(--border-subtle);
           color: var(--text-secondary);
+          cursor: pointer;
+          transition: background-color var(--transition-fast), color var(--transition-fast);
         }
-        .order-arrow-btn:disabled { opacity: 0.2; cursor: not-allowed; }
+        .order-arrow-btn:hover:not(:disabled) {
+          background-color: var(--surface-3);
+          color: var(--text-primary);
+        }
+        .order-arrow-btn:disabled {
+          opacity: 0.25;
+          cursor: not-allowed;
+        }
+        .drag-handle {
+          display: none;
+          color: var(--text-muted);
+          cursor: grab;
+          padding: 4px;
+        }
+        .drag-handle:active {
+          cursor: grabbing;
+        }
+        @media (pointer: fine) {
+          .drag-handle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+        }
+        .order-footer {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: var(--space-2);
+          width: 100%;
+        }
 
         @media (pointer: coarse) {
           .order-arrow-btn {
@@ -331,37 +386,6 @@ export default function PlaylistOrderModal({ playlistName, videos, onSave, onClo
           }
         }
       `}</style>
-    </div>
-  );
-}
-
-function XIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-    </svg>
-  );
-}
-function GripIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-      <circle cx="9" cy="6" r="1" fill="currentColor"/><circle cx="15" cy="6" r="1" fill="currentColor"/>
-      <circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/>
-      <circle cx="9" cy="18" r="1" fill="currentColor"/><circle cx="15" cy="18" r="1" fill="currentColor"/>
-    </svg>
-  );
-}
-function ChevronUpIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
-      <polyline points="18 15 12 9 6 15"/>
-    </svg>
-  );
-}
-function ChevronDownIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
-      <polyline points="6 9 12 15 18 9"/>
-    </svg>
+    </Modal>
   );
 }

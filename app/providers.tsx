@@ -4,6 +4,7 @@ import { NeonAuthUIProvider } from '@neondatabase/auth-ui';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authClient } from '@/lib/auth/client';
+import { ToastProvider } from '@/components/ui/ToastProvider';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -27,7 +28,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         EMAIL_OTP_VERIFY_ACTION: 'Verify OTP',
       }}
     >
-      {children}
+      <ToastProvider>
+        {children}
+      </ToastProvider>
     </NeonAuthUIProvider>
   );
 }

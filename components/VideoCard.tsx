@@ -1,7 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
+import { Bookmark, ListPlus, Play } from 'lucide-react';
 import type { VideoResult } from '@/lib/youtube';
+import Icon from './ui/Icon';
+import IconButton from './ui/IconButton';
 
 interface Props {
   video: VideoResult;
@@ -12,7 +15,6 @@ interface Props {
   onUnsave?: (videoId: string) => Promise<void>;
   onAddToPlaylist?: (video: VideoResult) => void;
   showAddToPlaylist?: boolean;
-  /** When provided, clicking the thumbnail or title opens the in-app player instead of navigating to YouTube. */
   onPlay?: (video: VideoResult) => void;
 }
 
@@ -24,7 +26,7 @@ export default function VideoCard({
   onSave,
   onUnsave,
   onAddToPlaylist,
-  showAddToPlaylist = false,
+  showAddToPlaylist = true,
   onPlay,
 }: Props) {
   const [saved, setSaved] = useState(isSaved);
@@ -64,7 +66,7 @@ export default function VideoCard({
     onAddToPlaylist?.(video);
   };
 
-  const handlePlay = (e: React.MouseEvent) => {
+  const handleCardClick = (e: React.MouseEvent) => {
     if (onPlay) {
       e.preventDefault();
       onPlay(video);
@@ -72,160 +74,277 @@ export default function VideoCard({
   };
 
   return (
-    <article className="video-card" aria-label={`Video: ${video.title}`}>
-      {/* Thumbnail */}
-      <a
-        href={ytUrl}
-        target={onPlay ? undefined : '_blank'}
-        rel={onPlay ? undefined : 'noopener noreferrer'}
-        className="thumbnail-link"
-        aria-label={onPlay ? `Play "${video.title}" in Rewind` : `Watch "${video.title}" on YouTube`}
-        id={`video-${video.videoId}`}
-        onClick={handlePlay}
-      >
-        <div className="thumbnail-wrapper">
-          {video.thumbnail ? (
-            <img
-              src={video.thumbnail}
-              alt={video.title}
-              loading="lazy"
-              width={320}
-              height={180}
-            />
-          ) : (
-            <div className="thumbnail-placeholder" aria-hidden="true">
-              <PlayIcon />
-            </div>
-          )}
-        </div>
-      </a>
-
-      {/* Info row */}
-      <div className="video-info">
-        {/* Channel logo */}
-        <a
-          href={video.channelId ? `https://www.youtube.com/channel/${video.channelId}` : '#'}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="channel-logo-link"
-          aria-label={`Visit ${video.channelName || 'channel'} on YouTube`}
-          tabIndex={-1}
-        >
-          {video.channelLogo ? (
-            <img
-              src={video.channelLogo}
-              alt={video.channelName || 'Channel'}
-              className="channel-logo"
-              width={36}
-              height={36}
-              loading="lazy"
-            />
-          ) : (
-            <div className="channel-logo-placeholder" aria-hidden="true">
-              {(video.channelName || 'Y').charAt(0).toUpperCase()}
-            </div>
-          )}
-        </a>
-
-        {/* Text */}
-        <div className="video-text">
+    <article className="video-card-container" aria-label={`Video: ${video.title}`}>
+      <div className="video-card">
+        {/* Thumbnail Area with Floating Overlay Actions (§9.5) */}
+        <div className="thumbnail-box">
           <a
             href={ytUrl}
             target={onPlay ? undefined : '_blank'}
             rel={onPlay ? undefined : 'noopener noreferrer'}
-            className="video-title line-clamp-2"
-            title={video.title || 'Untitled'}
-            onClick={handlePlay}
+            className="thumbnail-anchor"
+            aria-label={onPlay ? `Play "${video.title}" in Rewind` : `Watch "${video.title}" on YouTube`}
+            id={`video-${video.videoId}`}
+            onClick={handleCardClick}
           >
-            {video.title || 'Untitled'}
+            <div className="thumbnail-aspect">
+              {video.thumbnail ? (
+                <img
+                  src={video.thumbnail}
+                  alt={video.title}
+                  loading="lazy"
+                  width={320}
+                  height={180}
+                  className="thumbnail-img"
+                />
+              ) : (
+                <div className="thumbnail-placeholder" aria-hidden="true">
+                  <Icon as={Play} size={36} />
+                </div>
+              )}
+            </div>
           </a>
-          <div className="video-meta">
-            <span className="channel-name">{video.channelName || 'YouTube Channel'}</span>
-            <span className="meta-sep" aria-hidden="true">·</span>
-            <span>{formatCount(video.views)} views</span>
-            {video.likes != null && (
-              <>
-                <span className="meta-sep" aria-hidden="true">·</span>
-                <span>{formatCount(video.likes)} likes</span>
-              </>
+
+          {/* Top-Right Thumbnail Overlay Actions */}
+          <div className="thumbnail-actions-overlay">
+            {/* Bookmark button */}
+            {(onSave || onUnsave) && (
+              <IconButton
+                id={`save-btn-${video.videoId}`}
+                aria-label={saved ? `Unsave "${video.title}"` : `Save "${video.title}"`}
+                onClick={handleSaveToggle}
+                disabled={savingState === 'loading'}
+                size="sm"
+                className={`card-overlay-btn bookmark-btn ${saved ? 'is-saved' : ''}`}
+                tooltip={saved ? 'Unsave' : 'Save'}
+              >
+                <Icon
+                  as={Bookmark}
+                  size={16}
+                  anim="pop"
+                  style={{ fill: saved ? 'currentColor' : 'none' }}
+                />
+              </IconButton>
             )}
-          </div>
-          <div className="video-date text-muted text-xs">
-            {video.publishedAt ? formatDate(video.publishedAt) : ''}
+
+            {/* Add to Playlist button */}
+            {showAddToPlaylist && onAddToPlaylist && (
+              <IconButton
+                id={`playlist-btn-${video.videoId}`}
+                aria-label={`Add "${video.title}" to playlist`}
+                onClick={handleAddToPlaylistClick}
+                size="sm"
+                className="card-overlay-btn"
+                tooltip="Add to playlist"
+              >
+                <Icon as={ListPlus} size={16} anim="nudge-up" />
+              </IconButton>
+            )}
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="video-actions">
-          {(onSave || onUnsave) && (
-            <button
-              id={`save-btn-${video.videoId}`}
-              className={`btn-icon save-btn ${saved ? 'saved' : ''}`}
-              onClick={handleSaveToggle}
-              disabled={savingState === 'loading'}
-              aria-label={saved ? `Unsave "${video.title}"` : `Save "${video.title}"`}
-              aria-pressed={saved}
-              title={saved ? 'Unsave' : 'Save'}
+        {/* Video Info Section */}
+        <div className="video-info-row">
+          {/* Channel Logo */}
+          <a
+            href={video.channelId ? `https://www.youtube.com/channel/${video.channelId}` : '#'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="channel-avatar-link"
+            aria-label={`Visit ${video.channelName || 'channel'} on YouTube`}
+            tabIndex={-1}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {video.channelLogo ? (
+              <img
+                src={video.channelLogo}
+                alt=""
+                className="channel-avatar-img"
+                width={36}
+                height={36}
+                loading="lazy"
+              />
+            ) : (
+              <div className="channel-avatar-fallback" aria-hidden="true">
+                {(video.channelName || 'Y').charAt(0).toUpperCase()}
+              </div>
+            )}
+          </a>
+
+          {/* Metadata Block */}
+          <div className="video-details">
+            <a
+              href={ytUrl}
+              target={onPlay ? undefined : '_blank'}
+              rel={onPlay ? undefined : 'noopener noreferrer'}
+              className="video-title-link line-clamp-2"
+              title={video.title || 'Untitled'}
+              onClick={handleCardClick}
             >
-              <BookmarkIcon filled={saved} />
-            </button>
-          )}
-          {showAddToPlaylist && (
-            <button
-              id={`playlist-btn-${video.videoId}`}
-              className="btn-icon"
-              onClick={handleAddToPlaylistClick}
-              aria-label={`Add "${video.title}" to playlist`}
-              title="Add to playlist"
-            >
-              <PlaylistAddIcon />
-            </button>
-          )}
+              {video.title || 'Untitled'}
+            </a>
+
+            <span className="channel-name truncate">
+              {video.channelName || 'YouTube Channel'}
+            </span>
+
+            <div className="video-stats tabular-nums">
+              <span>{formatCount(video.views)} views</span>
+              {video.likes != null && (
+                <>
+                  <span className="meta-sep" aria-hidden="true">·</span>
+                  <span>{formatCount(video.likes)} likes</span>
+                </>
+              )}
+              {video.publishedAt && (
+                <>
+                  <span className="meta-sep" aria-hidden="true">·</span>
+                  <span>{formatDate(video.publishedAt)}</span>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
       <style jsx>{`
+        .video-card-container {
+          container-type: inline-size;
+          container-name: card-container;
+          width: 100%;
+        }
+
         .video-card {
           display: flex;
           flex-direction: column;
-          border-radius: var(--radius-md);
-          overflow: hidden;
+          border-radius: var(--radius-lg);
           background-color: transparent;
           transition: transform var(--transition-fast);
-          container-type: inline-size;
+          overflow: hidden;
         }
+
         .video-card:hover {
           transform: translateY(-2px);
         }
-        .thumbnail-link {
-          display: block;
-          border-radius: var(--radius-md);
+
+        /* ── Thumbnail & Overlay ── */
+        .thumbnail-box {
+          position: relative;
+          width: 100%;
+          border-radius: var(--radius-lg);
           overflow: hidden;
+          background-color: var(--surface-2);
+          box-shadow: var(--shadow-sm);
         }
+
+        .thumbnail-anchor {
+          display: block;
+          width: 100%;
+          outline: none;
+        }
+
+        .thumbnail-aspect {
+          position: relative;
+          width: 100%;
+          aspect-ratio: 16 / 9;
+          overflow: hidden;
+          background-color: var(--surface-2);
+        }
+
+        .thumbnail-img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          transition: transform var(--dur-slow) var(--ease-standard);
+        }
+
+        @media (hover: hover) {
+          .video-card:hover .thumbnail-img {
+            transform: scale(1.03);
+          }
+        }
+
         .thumbnail-placeholder {
           width: 100%;
-          aspect-ratio: 16/9;
-          background-color: var(--bg-secondary);
+          height: 100%;
           display: flex;
           align-items: center;
           justify-content: center;
           color: var(--text-muted);
         }
-        .video-info {
+
+        /* Floating Overlay Buttons */
+        .thumbnail-actions-overlay {
+          position: absolute;
+          top: 6px;
+          right: 6px;
+          display: flex;
+          gap: 6px;
+          z-index: 2;
+        }
+
+        :global(.card-overlay-btn) {
+          background-color: rgba(15, 15, 15, 0.78) !important;
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          border: 1px solid rgba(255, 255, 255, 0.12) !important;
+          color: var(--text-primary) !important;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+          transition: opacity var(--transition-fast), transform var(--transition-fast), background-color var(--transition-fast) !important;
+        }
+
+        :global(.card-overlay-btn:hover) {
+          background-color: rgba(25, 25, 25, 0.95) !important;
+          transform: scale(1.08);
+        }
+
+        :global(.card-overlay-btn.bookmark-btn.is-saved) {
+          color: var(--accent) !important;
+          background-color: rgba(255, 30, 64, 0.18) !important;
+          border-color: var(--accent) !important;
+          opacity: 1 !important;
+        }
+
+        /* Hover reveals for fine pointers, always visible on touch */
+        @media (hover: hover) and (pointer: fine) {
+          .thumbnail-actions-overlay {
+            opacity: 0;
+            transition: opacity var(--transition-fast);
+          }
+          .video-card:hover .thumbnail-actions-overlay,
+          .video-card:focus-within .thumbnail-actions-overlay {
+            opacity: 1;
+          }
+          /* Always show bookmark if saved */
+          :global(.card-overlay-btn.is-saved) {
+            opacity: 1 !important;
+          }
+          .thumbnail-actions-overlay:has(.is-saved) {
+            opacity: 1;
+          }
+        }
+
+        /* ── Info Row ── */
+        .video-info-row {
           display: flex;
           gap: var(--space-3);
           padding: var(--space-3) var(--space-1) var(--space-2);
           align-items: flex-start;
         }
-        .channel-logo-link { flex-shrink: 0; }
-        .channel-logo {
+
+        .channel-avatar-link {
+          flex-shrink: 0;
+        }
+
+        .channel-avatar-img {
           width: 36px;
           height: 36px;
           border-radius: 50%;
           object-fit: cover;
-          background-color: var(--bg-secondary);
+          background-color: var(--surface-2);
         }
-        .channel-logo-placeholder {
+
+        .channel-avatar-fallback {
           width: 36px;
           height: 36px;
           border-radius: 50%;
@@ -235,16 +354,18 @@ export default function VideoCard({
           align-items: center;
           justify-content: center;
           font-weight: 700;
-          font-size: var(--text-base);
+          font-size: var(--text-sm);
         }
-        .video-text {
+
+        .video-details {
           flex: 1;
           min-width: 0;
           display: flex;
           flex-direction: column;
-          gap: var(--space-1);
+          gap: 2px;
         }
-        .video-title {
+
+        .video-title-link {
           font-size: clamp(0.85rem, 0.8rem + 0.25vw, 0.95rem);
           font-weight: 500;
           color: var(--text-primary);
@@ -252,42 +373,42 @@ export default function VideoCard({
           text-decoration: none;
           word-break: break-word;
         }
-        .video-title:hover { color: var(--text-primary); }
-        .video-meta {
+        .video-title-link:hover {
+          color: #fff;
+        }
+
+        .channel-name {
+          font-size: var(--text-xs);
+          color: var(--text-secondary);
+          margin-top: 1px;
+        }
+
+        .video-stats {
           display: flex;
           flex-wrap: wrap;
           align-items: center;
-          gap: var(--space-1);
+          gap: 4px;
           font-size: var(--text-xs);
-          color: var(--text-secondary);
-          line-height: 1.3;
-        }
-        .channel-name { color: var(--text-secondary); }
-        .meta-sep { color: var(--text-muted); }
-        .video-actions {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-          flex-shrink: 0;
-        }
-        .save-btn { color: var(--text-secondary); }
-        .save-btn.saved { color: var(--accent); }
-        .save-btn:disabled { opacity: 0.5; }
-
-        @media (pointer: coarse) {
-          .video-actions .btn-icon {
-            min-width: 44px;
-            min-height: 44px;
-          }
+          color: var(--text-muted);
+          margin-top: 2px;
         }
 
-        @container (max-width: 240px) {
-          .video-info {
+        .meta-sep {
+          color: var(--border-strong);
+        }
+
+        /* ── Card Container Query Density (§9.5) ── */
+        @container card-container (max-width: 240px) {
+          .video-info-row {
             gap: var(--space-2);
           }
-          .channel-logo, .channel-logo-placeholder {
+          .channel-avatar-img,
+          .channel-avatar-fallback {
             width: 28px;
             height: 28px;
+            font-size: var(--text-xs);
+          }
+          .video-title-link {
             font-size: var(--text-xs);
           }
         }
@@ -306,35 +427,4 @@ function formatCount(n: number | null): string {
 function formatDate(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-}
-
-function BookmarkIcon({ filled }: { filled: boolean }) {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-    </svg>
-  );
-}
-
-function PlaylistAddIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <line x1="8" y1="6" x2="21" y2="6"/>
-      <line x1="8" y1="12" x2="21" y2="12"/>
-      <line x1="8" y1="18" x2="11" y2="18"/>
-      <line x1="3" y1="6" x2="3.01" y2="6"/>
-      <line x1="3" y1="12" x2="3.01" y2="12"/>
-      <line x1="3" y1="18" x2="3.01" y2="18"/>
-      <line x1="16" y1="15" x2="16" y2="21"/>
-      <line x1="13" y1="18" x2="19" y2="18"/>
-    </svg>
-  );
-}
-
-function PlayIcon() {
-  return (
-    <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <polygon points="5 3 19 12 5 21 5 3"/>
-    </svg>
-  );
 }

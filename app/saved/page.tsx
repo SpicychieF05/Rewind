@@ -1,15 +1,20 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { Users, Film, X, Search } from 'lucide-react';
 import SavedTabs, { type SavedTab } from '@/components/SavedTabs';
 import ChannelBadge from '@/components/ChannelBadge';
 import VideoCard from '@/components/VideoCard';
 import VideoPlayer from '@/components/VideoPlayer';
 import PlaylistView from '@/components/PlaylistView';
+import PlaylistPicker from '@/components/PlaylistPicker';
+import EmptyState from '@/components/ui/EmptyState';
+import Button from '@/components/ui/Button';
+import Icon from '@/components/ui/Icon';
+import { useToast } from '@/components/ui/ToastProvider';
 import type { VideoResult } from '@/lib/youtube';
-
-// Metadata can't be used with 'use client', it's handled in a server wrapper below
-// See app/saved/page.tsx at the bottom.
 
 interface SavedChannel {
   channel_id: string;
@@ -25,204 +30,10 @@ interface Playlist {
   video_count: number;
 }
 
-interface PlaylistPickerProps {
-  video: VideoResult;
-  playlists: Playlist[];
-  onAdd: (playlistId: string) => void;
-  onClose: () => void;
-}
-
-function PlaylistPicker({ video, playlists, onAdd, onClose }: PlaylistPickerProps) {
-  const [newName, setNewName] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [loading, setLoading] = useState<string | null>(null);
-
-  const handleAdd = async (playlistId: string) => {
-    setLoading(playlistId);
-    await fetch('/api/playlist-videos', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playlistId, videoId: video.videoId }),
-    });
-    setLoading(null);
-    onAdd(playlistId);
-    onClose();
-  };
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newName.trim()) return;
-    setLoading('create');
-    const res = await fetch('/api/playlists', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName.trim() }),
-    });
-    const pl: Playlist = await res.json();
-    await fetch('/api/playlist-videos', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playlistId: pl.playlist_id, videoId: video.videoId }),
-    });
-    setLoading(null);
-    onAdd(pl.playlist_id);
-    onClose();
-  };
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
-
-  return (
-    <div
-      id="playlist-picker-overlay"
-      className="modal-overlay"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="picker-title"
-    >
-      <div className="modal-box picker-modal-box">
-        <div className="modal-header">
-          <h2 id="picker-title" style={{ fontSize: 'var(--text-md)', fontWeight: 700 }}>
-            Add to playlist
-          </h2>
-          <button
-            id="picker-close"
-            className="btn-icon picker-close-btn"
-            onClick={onClose}
-            aria-label="Close playlist picker"
-          >
-            <XIcon />
-          </button>
-        </div>
-        <div className="modal-body">
-          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginBottom: 'var(--space-3)', wordBreak: 'break-word' }}>
-            Adding: <strong style={{ color: 'var(--text-primary)' }}>{video.title}</strong>
-          </p>
-
-          {playlists.length > 0 && (
-            <ul style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', marginBottom: 'var(--space-4)' }}>
-              {playlists.map((pl) => (
-                <li key={pl.playlist_id}>
-                  <button
-                    id={`picker-playlist-${pl.playlist_id}`}
-                    onClick={() => handleAdd(pl.playlist_id)}
-                    disabled={loading === pl.playlist_id}
-                    className="picker-row"
-                    aria-label={`Add to ${pl.name}`}
-                  >
-                    <PlaylistIcon />
-                    <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pl.name}</span>
-                    <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)', flexShrink: 0 }}>
-                      {pl.video_count} video{pl.video_count !== 1 ? 's' : ''}
-                    </span>
-                    {loading === pl.playlist_id && <span className="spinner" aria-hidden="true" />}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {!creating ? (
-            <button
-              id="picker-new-playlist"
-              className="btn btn-ghost w-full picker-create-trigger"
-              style={{ justifyContent: 'flex-start' }}
-              onClick={() => setCreating(true)}
-            >
-              <PlusIcon /> New playlist
-            </button>
-          ) : (
-            <form onSubmit={handleCreate} style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-              <input
-                id="picker-new-name"
-                type="text"
-                className="input picker-name-input"
-                placeholder="Playlist name"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                autoFocus
-                required
-                aria-label="New playlist name"
-              />
-              <button
-                type="submit"
-                id="picker-create-submit"
-                className="btn btn-primary picker-submit-btn"
-                disabled={loading === 'create'}
-              >
-                {loading === 'create' ? <span className="spinner" aria-hidden="true" /> : 'Create & add'}
-              </button>
-            </form>
-          )}
-        </div>
-      </div>
-      <style jsx>{`
-        .picker-modal-box {
-          max-width: 440px;
-          width: min(100%, 440px);
-          max-height: min(90dvh, 520px);
-          overflow-y: auto;
-        }
-        .picker-close-btn {
-          min-width: 36px;
-          min-height: 36px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .picker-row {
-          display: flex;
-          align-items: center;
-          gap: var(--space-3);
-          width: 100%;
-          padding: var(--space-3);
-          border-radius: var(--radius-md);
-          background: transparent;
-          color: var(--text-primary);
-          transition: background-color 0.15s;
-          font-size: var(--text-sm);
-          min-height: 44px;
-        }
-        .picker-row:hover { background-color: var(--bg-tertiary); }
-        .picker-create-trigger {
-          min-height: 44px;
-        }
-        .picker-name-input {
-          flex: 1 1 160px;
-          min-height: 40px;
-          font-size: 16px;
-        }
-        .picker-submit-btn {
-          min-height: 40px;
-        }
-        @media (pointer: coarse) {
-          .picker-close-btn {
-            min-width: 44px;
-            min-height: 44px;
-          }
-          .picker-name-input,
-          .picker-submit-btn {
-            min-height: 44px;
-          }
-        }
-      `}</style>
-    </div>
-  );
-}
-
-// ── Main Saved Page ───────────────────────────────────────────────────────────
-
-import Link from 'next/link';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { Suspense } from 'react';
-
 function SavedPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { showToast } = useToast();
   const urlQuery = searchParams.get('q') || '';
 
   const [activeTab, setActiveTab] = useState<SavedTab>(urlQuery ? 'videos' : 'channels');
@@ -234,7 +45,7 @@ function SavedPageContent() {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [playlistPicker, setPlaylistPicker] = useState<VideoResult | null>(null);
+  const [playlistPickerVideo, setPlaylistPickerVideo] = useState<VideoResult | null>(null);
   const [activeVideo, setActiveVideo] = useState<VideoResult | null>(null);
 
   useEffect(() => {
@@ -253,14 +64,14 @@ function SavedPageContent() {
     channelId:   (v.channelId as string) || (v.channel_id as string) || '',
     channelName: (v.channelName as string) || (v.channel_name as string) || 'YouTube Channel',
     channelLogo: (v.channelLogo as string) || (v.channel_logo as string) || '',
-    thumbnail:   (v.thumbnail as string) || (v.thumbnail as string) || '',
+    thumbnail:   (v.thumbnail as string) || '',
     publishedAt: (v.publishedAt as string) || (v.published_at as string) || '',
     views:       v.views != null ? Number(v.views) : null,
     likes:       v.likes != null ? Number(v.likes) : null,
     duration:    null,
   });
 
-  // Load all data
+  // Load all saved data
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -269,20 +80,22 @@ function SavedPageContent() {
         fetch('/api/videos'),
         fetch('/api/playlists'),
       ]);
+
       if (chRes.status === 401 || vidRes.status === 401 || plRes.status === 401) {
         router.push('/auth/sign-in');
         return;
       }
+
       const [ch, vids, pls] = await Promise.all([chRes.json(), vidRes.json(), plRes.json()]);
       setChannels(Array.isArray(ch) ? ch : []);
       setVideos(Array.isArray(vids) ? vids.map(normalizeVideo) : []);
       setPlaylists(Array.isArray(pls) ? pls : []);
     } catch {
-      // Handle error gracefully
+      showToast('Failed to load saved library', 'error');
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [router, showToast]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -300,27 +113,46 @@ function SavedPageContent() {
     return true;
   });
 
-  const filteredPlaylists = activeChannelFilter
-    ? playlists // playlist filtering is done server-side on expand
-    : playlists;
-
   // ── Channel actions ──────────────────────────────────────────────────────
-
   const handleChannelSelect = (channelId: string) => {
     setActiveChannelFilter((prev) => (prev === channelId ? null : channelId));
     setActiveTab('videos');
   };
 
   const handleUnsaveChannel = async (channelId: string) => {
-    await fetch(`/api/channels?channelId=${channelId}`, { method: 'DELETE' });
-    setChannels((prev) => prev.filter((c) => c.channel_id !== channelId));
+    const channelToRemove = channels.find((c) => c.channel_id === channelId);
+    try {
+      const res = await fetch(`/api/channels?channelId=${channelId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setChannels((prev) => prev.filter((c) => c.channel_id !== channelId));
+        if (activeChannelFilter === channelId) {
+          setActiveChannelFilter(null);
+        }
+        showToast(
+          channelToRemove ? `Removed "${channelToRemove.name}" from saved channels` : 'Channel removed',
+          'info'
+        );
+      } else {
+        showToast('Failed to remove channel', 'error');
+      }
+    } catch {
+      showToast('Network error removing channel', 'error');
+    }
   };
 
-  // ── Video actions ──────────────────────────────────────────────────────
-
+  // ── Video actions ────────────────────────────────────────────────────────
   const handleUnsaveVideo = async (videoId: string) => {
-    await fetch(`/api/videos?videoId=${videoId}`, { method: 'DELETE' });
-    setVideos((prev) => prev.filter((v) => v.videoId !== videoId));
+    try {
+      const res = await fetch(`/api/videos?videoId=${videoId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setVideos((prev) => prev.filter((v) => v.videoId !== videoId));
+        showToast('Video removed from saved library', 'info');
+      } else {
+        showToast('Failed to remove video', 'error');
+      }
+    } catch {
+      showToast('Network error removing video', 'error');
+    }
   };
 
   const clearSearchFilter = () => {
@@ -328,65 +160,104 @@ function SavedPageContent() {
     router.push('/saved', { scroll: false });
   };
 
+  const activeChannelObj = channels.find((c) => c.channel_id === activeChannelFilter);
+
   return (
-    <div className="container" style={{ paddingTop: 'var(--space-5)', paddingBottom: 'var(--space-12)' }}>
-      <h1 className="saved-heading">Saved Library</h1>
-
-      {/* Filter chips (Channel & Search query) */}
-      <div className="filter-chips-container" style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
-        {activeChannelFilter && (
-          <div id="channel-filter-chip" className="filter-chip" role="status" aria-live="polite">
-            <span>Filtered by channel: <strong>{channels.find((c) => c.channel_id === activeChannelFilter)?.name}</strong></span>
-            <button
-              className="btn-icon filter-chip-close"
-              onClick={() => setActiveChannelFilter(null)}
-              aria-label="Clear channel filter"
-            >
-              <XIcon />
-            </button>
-          </div>
-        )}
-
-        {searchQuery.trim() && (
-          <div id="search-filter-chip" className="filter-chip" role="status" aria-live="polite">
-            <span>Title search: <strong>&quot;{searchQuery.trim()}&quot;</strong></span>
-            <button
-              className="btn-icon filter-chip-close"
-              onClick={clearSearchFilter}
-              aria-label="Clear search filter"
-            >
-              <XIcon />
-            </button>
-          </div>
-        )}
+    <div className="saved-page-container">
+      {/* Header */}
+      <div className="saved-header">
+        <h1 className="saved-title">Saved Library</h1>
+        <p className="saved-subtitle">
+          Your bookmarked channels, saved videos, and custom playlists.
+        </p>
       </div>
 
-      <SavedTabs activeTab={activeTab} onTabChange={setActiveTab} />
+      {/* Filter chips (Channel & Search query) */}
+      {(activeChannelFilter || searchQuery.trim()) && (
+        <div className="filter-chips-bar" role="status" aria-live="polite">
+          {activeChannelFilter && (
+            <div id="channel-filter-chip" className="filter-pill">
+              <Icon as={Users} size={14} className="filter-pill-icon" />
+              <span>
+                Channel: <strong>{activeChannelObj?.name || 'Selected'}</strong>
+              </span>
+              <button
+                type="button"
+                className="filter-pill-clear"
+                onClick={() => setActiveChannelFilter(null)}
+                aria-label="Clear channel filter"
+                title="Clear channel filter"
+              >
+                <Icon as={X} size={14} />
+              </button>
+            </div>
+          )}
 
-      {loading && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-12)', gap: 'var(--space-3)', color: 'var(--text-muted)' }}>
-          <span className="spinner" aria-label="Loading saved library" />
-          <span>Loading…</span>
+          {searchQuery.trim() && (
+            <div id="search-filter-chip" className="filter-pill">
+              <Icon as={Search} size={14} className="filter-pill-icon" />
+              <span>
+                Search: <strong>&quot;{searchQuery.trim()}&quot;</strong>
+              </span>
+              <button
+                type="button"
+                className="filter-pill-clear"
+                onClick={clearSearchFilter}
+                aria-label="Clear search filter"
+                title="Clear search filter"
+              >
+                <Icon as={X} size={14} />
+              </button>
+            </div>
+          )}
         </div>
       )}
 
+      {/* Tabs navigation */}
+      <SavedTabs
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        counts={{
+          channels: channels.length,
+          videos: videos.length,
+          playlists: playlists.length,
+        }}
+      />
+
+      {/* Loading state */}
+      {loading && (
+        <div className="saved-loading-state">
+          <span className="spinner" aria-hidden="true" />
+          <span>Loading your library…</span>
+        </div>
+      )}
+
+      {/* Tab Panels */}
       {!loading && (
         <>
-          {/* ── Channels tab ───────────────────────────────────────── */}
+          {/* ── Channels Tab ────────────────────────────────────── */}
           {activeTab === 'channels' && (
             <div
               id="tabpanel-channels"
               role="tabpanel"
               aria-labelledby="tab-channels"
+              className="tabpanel-content"
             >
               {channels.length === 0 ? (
-                <div className="empty-state">
-                  <ChannelIcon />
-                  <h3>No saved channels</h3>
-                  <p>Search a channel and save it here for quick access.</p>
-                </div>
+                <EmptyState
+                  icon={Users}
+                  title="No saved channels"
+                  description="Search for a YouTube creator on the Home page and save their channel to keep tabs on their archive."
+                  actions={
+                    <Link href="/">
+                      <Button tier="accent" icon={<Icon as={Search} size={16} />}>
+                        Explore Channels
+                      </Button>
+                    </Link>
+                  }
+                />
               ) : (
-                <div className="channel-grid" style={{ paddingTop: 'var(--space-4)' }}>
+                <div className="saved-channel-grid">
                   {channels.map((ch) => (
                     <ChannelBadge
                       key={ch.channel_id}
@@ -401,55 +272,55 @@ function SavedPageContent() {
             </div>
           )}
 
-          {/* ── Videos tab ─────────────────────────────────────────── */}
+          {/* ── Videos Tab ──────────────────────────────────────── */}
           {activeTab === 'videos' && (
             <div
               id="tabpanel-videos"
               role="tabpanel"
               aria-labelledby="tab-videos"
+              className="tabpanel-content"
             >
               {filteredVideos.length === 0 ? (
-                <div className="empty-state" role="status">
-                  <VideoIcon />
-                  <h3>
-                    {searchQuery.trim()
-                      ? <>No saved videos matching &quot;{searchQuery.trim()}&quot;</>
+                <EmptyState
+                  icon={Film}
+                  title={
+                    searchQuery.trim()
+                      ? `No saved videos matching "${searchQuery.trim()}"`
                       : activeChannelFilter
-                      ? 'No saved videos from this channel'
-                      : 'No saved videos'}
-                  </h3>
-                  <p>
-                    {searchQuery.trim()
-                      ? "You haven't saved any videos matching this title yet. Search a channel's videos on the home page first to find and save them to your library!"
+                      ? `No saved videos from ${activeChannelObj?.name || 'this channel'}`
+                      : 'No saved videos yet'
+                  }
+                  description={
+                    searchQuery.trim()
+                      ? 'Try searching with different keywords, or search channel archives on the Home page to discover and bookmark videos.'
                       : activeChannelFilter
-                      ? 'No saved videos found for this channel.'
-                      : 'Save videos from search results to build your library.'}
-                  </p>
-                  {searchQuery.trim() ? (
-                    <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: 'var(--space-3)', flexWrap: 'wrap', justifyContent: 'center' }}>
-                      <Link
-                        href={`/?q=${encodeURIComponent(searchQuery.trim())}`}
-                        className="btn btn-primary"
-                      >
-                        Search Channel Videos on Home
+                      ? 'You have not saved any individual videos from this channel yet.'
+                      : 'Bookmark videos from timeline search results to build your personalized archive.'
+                  }
+                  actions={
+                    searchQuery.trim() ? (
+                      <div className="empty-actions-row">
+                        <Link href={`/?q=${encodeURIComponent(searchQuery.trim())}`}>
+                          <Button tier="accent" icon={<Icon as={Search} size={16} />}>
+                            Search Home Archive
+                          </Button>
+                        </Link>
+                        <Button tier="ghost" onClick={clearSearchFilter}>
+                          Clear Filter
+                        </Button>
+                      </div>
+                    ) : (
+                      <Link href="/">
+                        <Button tier="accent" icon={<Icon as={Search} size={16} />}>
+                          Discover Videos
+                        </Button>
                       </Link>
-                      <button
-                        type="button"
-                        onClick={clearSearchFilter}
-                        className="btn btn-ghost"
-                      >
-                        Clear search
-                      </button>
-                    </div>
-                  ) : (
-                    <Link href="/" className="btn btn-primary" style={{ marginTop: 'var(--space-3)' }}>
-                      Search Channel Videos
-                    </Link>
-                  )}
-                </div>
+                    )
+                  }
+                />
               ) : (
                 <div
-                  className="video-grid"
+                  className="saved-video-grid"
                   role="list"
                   aria-label="Saved videos"
                 >
@@ -459,7 +330,7 @@ function SavedPageContent() {
                         video={v}
                         isSaved={true}
                         onUnsave={handleUnsaveVideo}
-                        onAddToPlaylist={(video) => setPlaylistPicker(video)}
+                        onAddToPlaylist={(vid) => setPlaylistPickerVideo(vid)}
                         showAddToPlaylist={true}
                         onPlay={setActiveVideo}
                       />
@@ -470,31 +341,35 @@ function SavedPageContent() {
             </div>
           )}
 
-          {/* ── Playlists tab ──────────────────────────────────────── */}
+          {/* ── Playlists Tab ───────────────────────────────────── */}
           {activeTab === 'playlists' && (
             <div
               id="tabpanel-playlists"
               role="tabpanel"
               aria-labelledby="tab-playlists"
-              style={{ paddingTop: 'var(--space-5)' }}
+              className="tabpanel-content"
             >
-              <PlaylistView playlists={filteredPlaylists} onRefresh={loadAll} onPlay={setActiveVideo} />
+              <PlaylistView
+                playlists={playlists}
+                onRefresh={loadAll}
+                onPlay={setActiveVideo}
+              />
             </div>
           )}
         </>
       )}
 
-      {/* Playlist picker modal */}
-      {playlistPicker && (
+      {/* Playlist Picker Modal */}
+      {playlistPickerVideo && (
         <PlaylistPicker
-          video={playlistPicker}
+          video={playlistPickerVideo}
           playlists={playlists}
-          onAdd={() => loadAll()}
-          onClose={() => setPlaylistPicker(null)}
+          onRefreshPlaylists={loadAll}
+          onClose={() => setPlaylistPickerVideo(null)}
         />
       )}
 
-      {/* In-app video player overlay */}
+      {/* In-app Video Player Overlay */}
       {activeVideo && (
         <VideoPlayer
           videoId={activeVideo.videoId}
@@ -504,37 +379,110 @@ function SavedPageContent() {
       )}
 
       <style jsx>{`
-        .saved-heading {
-          font-size: clamp(var(--text-xl), 3vw, var(--text-2xl));
-          font-weight: 700;
+        .saved-page-container {
+          max-width: var(--content-max-width);
+          margin: 0 auto;
+          padding: var(--space-6) var(--space-4) var(--space-12);
+          width: 100%;
+        }
+        .saved-header {
           margin-bottom: var(--space-4);
         }
-        .filter-chip {
+        .saved-title {
+          font-size: clamp(var(--text-xl), 3.5vw, var(--text-2xl));
+          font-weight: 700;
+          letter-spacing: -0.02em;
+          color: var(--text-primary);
+        }
+        .saved-subtitle {
+          font-size: var(--text-sm);
+          color: var(--text-secondary);
+          margin-top: 2px;
+        }
+        .filter-chips-bar {
+          display: flex;
+          flex-wrap: wrap;
+          gap: var(--space-2);
+          margin-bottom: var(--space-3);
+        }
+        .filter-pill {
           display: inline-flex;
           align-items: center;
           gap: var(--space-2);
-          background-color: var(--bg-secondary);
-          border: 1px solid var(--border);
+          background-color: var(--surface-2);
+          border: 1px solid var(--border-subtle);
           border-radius: var(--radius-full);
-          padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
-          font-size: var(--text-sm);
+          padding: 4px var(--space-2) 4px var(--space-3);
+          font-size: var(--text-xs);
           color: var(--text-secondary);
-          max-width: 100%;
-          word-break: break-word;
+          transition: border-color var(--transition-fast);
         }
-        .filter-chip-close {
-          width: 28px;
-          height: 28px;
+        .filter-pill:hover {
+          border-color: var(--border);
+        }
+        :global(.filter-pill-icon) {
+          color: var(--accent);
+          flex-shrink: 0;
+        }
+        .filter-pill strong {
+          color: var(--text-primary);
+        }
+        .filter-pill-clear {
           display: inline-flex;
           align-items: center;
           justify-content: center;
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          background: transparent;
+          border: none;
           color: var(--text-muted);
-          border-radius: var(--radius-full);
+          cursor: pointer;
+          transition: background-color var(--transition-fast), color var(--transition-fast);
         }
-        @media (pointer: coarse) {
-          .filter-chip-close {
-            width: 36px;
-            height: 36px;
+        .filter-pill-clear:hover {
+          background-color: var(--surface-3);
+          color: var(--text-primary);
+        }
+        .saved-loading-state {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: var(--space-12) 0;
+          gap: var(--space-3);
+          color: var(--text-muted);
+          font-size: var(--text-sm);
+        }
+        .tabpanel-content {
+          padding-top: var(--space-3);
+        }
+        .saved-channel-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+          gap: var(--space-3);
+        }
+        .saved-video-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+          gap: var(--space-4);
+          container-type: inline-size;
+        }
+        .empty-actions-row {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+          flex-wrap: wrap;
+          justify-content: center;
+        }
+
+        @media (max-width: 480px) {
+          .saved-channel-grid {
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: var(--space-2);
+          }
+          .saved-video-grid {
+            grid-template-columns: 1fr;
+            gap: var(--space-3);
           }
         }
       `}</style>
@@ -547,45 +495,5 @@ export default function SavedPage() {
     <Suspense>
       <SavedPageContent />
     </Suspense>
-  );
-}
-
-// ── Icon helpers ──────────────────────────────────────────────────────────────
-
-function XIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
-      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-    </svg>
-  );
-}
-function PlusIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
-      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-    </svg>
-  );
-}
-function PlaylistIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-      <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="11" y2="18"/>
-      <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-    </svg>
-  );
-}
-function ChannelIcon() {
-  return (
-    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{ color: 'var(--text-muted)' }} aria-hidden="true">
-      <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
-    </svg>
-  );
-}
-function VideoIcon() {
-  return (
-    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{ color: 'var(--text-muted)' }} aria-hidden="true">
-      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-      <line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
-    </svg>
   );
 }

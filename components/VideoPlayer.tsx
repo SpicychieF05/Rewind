@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { RectangleHorizontal, Maximize, Minimize, X, Play, ChevronDown } from 'lucide-react';
+import Icon from './ui/Icon';
 import type { VideoResult } from '@/lib/youtube';
 
 // ── YouTube IFrame API types (minimal) ────────────────────────────────────────
@@ -82,18 +84,15 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
   useEffect(() => { modeRef.current = mode; }, [mode]);
 
   // ── Load API ────────────────────────────────────────────────────────────────
-
   useEffect(() => {
     loadYouTubeAPI().then(() => setApiReady(true));
   }, []);
 
   // ── Initialize / swap player ─────────────────────────────────────────────────
-
   useEffect(() => {
     if (!apiReady || !playerDivRef.current) return;
 
     if (playerRef.current) {
-      // Already initialised — just swap the video
       playerRef.current.loadVideoById(currentVideoId);
       return;
     }
@@ -103,14 +102,13 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
       playerVars: {
         autoplay: 1,
         rel: 0,
-        fs: 0,        // disable YouTube's own native fullscreen button
+        fs: 0, // disable YouTube's own native fullscreen button
         modestbranding: 1,
       },
     });
   }, [apiReady, currentVideoId]);
 
   // ── Destroy on unmount ───────────────────────────────────────────────────────
-
   useEffect(() => {
     return () => {
       playerRef.current?.destroy();
@@ -119,7 +117,6 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
   }, []);
 
   // ── Swap video (side panel click) ────────────────────────────────────────────
-
   const handleSwap = useCallback((video: VideoResult) => {
     setCurrentVideoId(video.videoId);
     if (playerRef.current) {
@@ -129,7 +126,6 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
   }, [onVideoSwap]);
 
   // ── Fullscreen helpers ───────────────────────────────────────────────────────
-
   const enterFullscreen = useCallback(() => {
     containerRef.current?.requestFullscreen?.().catch(() => {});
     setMode('fullscreen');
@@ -155,7 +151,6 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
   }, []);
 
   // ── Sync mode when browser exits fullscreen via Esc ─────────────────────────
-
   useEffect(() => {
     const handler = () => {
       if (!document.fullscreenElement && modeRef.current === 'fullscreen') {
@@ -167,10 +162,8 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
   }, []);
 
   // ── Keyboard shortcuts ───────────────────────────────────────────────────────
-
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Guard: don't fire inside input/textarea/select/contenteditable
       const tag = (document.activeElement?.tagName ?? '').toLowerCase();
       const isEditable = document.activeElement?.getAttribute('contenteditable') === 'true';
       if (['input', 'textarea', 'select'].includes(tag) || isEditable) return;
@@ -182,7 +175,6 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
         e.preventDefault();
         toggleFullscreen();
       } else if (e.key === 'Escape' && modeRef.current !== 'fullscreen') {
-        // Esc closes overlay (when NOT in browser fullscreen — browser handles that case)
         onClose();
       }
     };
@@ -190,8 +182,6 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [toggleTheater, toggleFullscreen, onClose]);
-
-  // ── Render ───────────────────────────────────────────────────────────────────
 
   const isTheater = mode === 'theater';
   const isFullscreen = mode === 'fullscreen';
@@ -205,47 +195,49 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
       role="dialog"
       aria-label="In-app video player"
     >
-
       <div className="player-shell" ref={containerRef}>
-        {/* ── Top bar ── */}
+        {/* Top Control Bar */}
         <div className="player-topbar">
           <div className="player-mode-controls">
             {/* Theater button */}
             <button
               id="player-theater-btn"
-              className={`player-ctrl-btn ${isTheater ? 'active' : ''}`}
+              type="button"
+              className={`player-ctrl-btn ${isTheater ? 'is-active' : ''}`}
               onClick={toggleTheater}
               aria-label={isTheater ? 'Exit theater mode' : 'Enter theater mode'}
               title={isTheater ? 'Exit theater (T)' : 'Theater mode (T)'}
             >
-              <TheaterIcon active={isTheater} />
+              <Icon as={RectangleHorizontal} size={18} />
             </button>
 
             {/* Fullscreen button */}
             <button
               id="player-fullscreen-btn"
-              className={`player-ctrl-btn ${isFullscreen ? 'active' : ''}`}
+              type="button"
+              className={`player-ctrl-btn ${isFullscreen ? 'is-active' : ''}`}
               onClick={toggleFullscreen}
               aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
               title={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
             >
-              <FullscreenIcon active={isFullscreen} />
+              <Icon as={isFullscreen ? Minimize : Maximize} size={18} />
             </button>
           </div>
 
           {/* Close button */}
           <button
             id="player-close-btn"
+            type="button"
             className="player-ctrl-btn player-close"
             onClick={onClose}
             aria-label="Close player"
             title="Close (Esc)"
           >
-            <CloseIcon />
+            <Icon as={X} size={20} />
           </button>
         </div>
 
-        {/* ── Main content row ── */}
+        {/* Main content */}
         <div className="player-content">
           {/* Player area */}
           <div className="player-area">
@@ -259,18 +251,18 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
               )}
             </div>
 
-            {/* Keyboard hint */}
+            {/* Keyboard shortcut hint */}
             {!isFullscreen && (
               <p className="player-shortcut-hint" aria-hidden="true">
-                <kbd>T</kbd> theater &nbsp;·&nbsp; <kbd>F</kbd> fullscreen
+                <kbd>T</kbd> theater &nbsp;·&nbsp; <kbd>F</kbd> fullscreen &nbsp;·&nbsp; <kbd>Esc</kbd> close
               </p>
             )}
           </div>
 
-          {/* ── Saved Videos side panel (Normal mode only) ── */}
+          {/* Saved Videos side panel (Normal mode only) */}
           {showPanel && (
-            <>
-              {/* Mobile toggle button */}
+            <div className="player-panel-section">
+              {/* Mobile collapse toggle */}
               <button
                 type="button"
                 className="player-mobile-panel-toggle"
@@ -280,7 +272,7 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
               >
                 <span>Saved Videos ({savedVideos.length})</span>
                 <span className={`toggle-chevron ${mobilePanelOpen ? 'open' : ''}`}>
-                  <ChevronDownIconSmall />
+                  <Icon as={ChevronDown} size={16} />
                 </span>
               </button>
 
@@ -289,52 +281,58 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
                 className={`player-saved-panel ${mobilePanelOpen ? 'mobile-open' : ''}`}
                 aria-label="Saved videos"
               >
-                <h2 className="panel-heading">Saved Videos</h2>
+                <h2 className="panel-heading">Saved Videos ({savedVideos.length})</h2>
                 <ul className="panel-list" role="list">
-                  {savedVideos.map((v) => (
-                    <li key={v.videoId}>
-                      <button
-                        id={`panel-video-${v.videoId}`}
-                        className={`panel-item ${v.videoId === currentVideoId ? 'panel-item-active' : ''}`}
-                        onClick={() => handleSwap(v)}
-                        aria-label={`Play ${v.title}`}
-                        aria-current={v.videoId === currentVideoId ? 'true' : undefined}
-                      >
-                        <div className="panel-thumb-wrap">
-                          {v.thumbnail ? (
-                            <img
-                              src={v.thumbnail}
-                              alt={v.title}
-                              className="panel-thumb"
-                              width={100}
-                              height={56}
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="panel-thumb-placeholder" aria-hidden="true">
-                              <PanelPlayIcon />
-                            </div>
-                          )}
-                          {v.videoId === currentVideoId && (
-                            <div className="panel-now-playing" aria-hidden="true">▶</div>
-                          )}
-                        </div>
-                        <div className="panel-info">
-                          <span className="panel-title line-clamp-2">{v.title}</span>
-                          <span className="panel-channel">{v.channelName || 'YouTube Channel'}</span>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
+                  {savedVideos.map((v) => {
+                    const isCurrent = v.videoId === currentVideoId;
+
+                    return (
+                      <li key={v.videoId}>
+                        <button
+                          id={`panel-video-${v.videoId}`}
+                          type="button"
+                          className={`panel-item ${isCurrent ? 'panel-item-active' : ''}`}
+                          onClick={() => handleSwap(v)}
+                          aria-label={`Play ${v.title}`}
+                          aria-current={isCurrent ? 'true' : undefined}
+                        >
+                          <div className="panel-thumb-wrap">
+                            {v.thumbnail ? (
+                              <img
+                                src={v.thumbnail}
+                                alt={v.title}
+                                className="panel-thumb"
+                                width={100}
+                                height={56}
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="panel-thumb-placeholder" aria-hidden="true">
+                                <Icon as={Play} size={16} />
+                              </div>
+                            )}
+                            {isCurrent && (
+                              <div className="panel-now-playing" aria-hidden="true">
+                                <Icon as={Play} size={14} />
+                              </div>
+                            )}
+                          </div>
+                          <div className="panel-info">
+                            <span className="panel-title line-clamp-2">{v.title}</span>
+                            <span className="panel-channel truncate">{v.channelName || 'YouTube Channel'}</span>
+                          </div>
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               </aside>
-            </>
+            </div>
           )}
         </div>
       </div>
 
       <style jsx>{`
-        /* ── Overlay ── */
         .player-overlay {
           position: fixed;
           inset: 0;
@@ -343,22 +341,20 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           flex-direction: column;
           align-items: center;
           justify-content: flex-start;
-          padding-top: max(var(--nav-height), var(--safe-top));
-          padding-bottom: max(var(--space-2), var(--safe-bottom));
-          padding-left: max(var(--space-2), var(--safe-left));
-          padding-right: max(var(--space-2), var(--safe-right));
+          padding-top: max(var(--nav-height), env(safe-area-inset-top, 0px));
+          padding-bottom: max(var(--space-2), env(safe-area-inset-bottom, 0px));
+          padding-left: max(var(--space-2), env(safe-area-inset-left, 0px));
+          padding-right: max(var(--space-2), env(safe-area-inset-right, 0px));
           background-color: var(--bg-primary);
           overflow-y: auto;
           -webkit-overflow-scrolling: touch;
         }
 
-        /* Theater: full-black, no scroll — mirrors YouTube theater mode */
         .player-overlay.theater {
           background-color: #000;
           overflow: hidden;
         }
 
-        /* ── Shell ── */
         .player-shell {
           width: 100%;
           max-width: var(--content-max-width);
@@ -366,9 +362,10 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           display: flex;
           flex-direction: column;
           gap: var(--space-2);
+          container-type: inline-size;
+          container-name: player-container;
         }
 
-        /* Theater: shell becomes centered, narrower padding */
         .theater .player-shell {
           position: relative;
           z-index: 1;
@@ -376,9 +373,11 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           border-radius: var(--radius-lg);
           padding: var(--space-2) var(--space-4) var(--space-4);
           box-shadow: 0 0 0 1px var(--border-subtle), var(--shadow-lg);
+          height: calc(100dvh - var(--nav-height));
+          max-width: 100%;
+          overflow: hidden;
         }
 
-        /* Fullscreen: container fills entire screen */
         .player-shell:fullscreen,
         .player-shell:-webkit-full-screen {
           background-color: #000;
@@ -387,7 +386,6 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           border-radius: 0;
         }
 
-        /* ── Top bar ── */
         .player-topbar {
           display: flex;
           align-items: center;
@@ -407,32 +405,39 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           height: 38px;
           border-radius: var(--radius-full);
           background: transparent;
+          border: none;
           color: var(--text-secondary);
+          cursor: pointer;
           transition: background-color var(--transition-fast), color var(--transition-fast);
         }
         .player-ctrl-btn:hover {
-          background-color: var(--bg-secondary);
+          background-color: var(--surface-2);
           color: var(--text-primary);
         }
-        .player-ctrl-btn.active {
+        .player-ctrl-btn.is-active {
           color: var(--accent);
+          background-color: var(--accent-subtle);
         }
         .player-close {
           color: var(--text-muted);
         }
         .player-close:hover {
-          background-color: rgba(239, 68, 68, 0.15);
-          color: #ef4444;
+          background-color: var(--error-subtle);
+          color: var(--error);
         }
 
-        /* ── Content row ── */
         .player-content {
           display: flex;
           gap: var(--space-4);
           align-items: flex-start;
         }
 
-        /* ── Player area ── */
+        .theater .player-content {
+          flex: 1;
+          min-height: 0;
+          flex-direction: column;
+        }
+
         .player-area {
           flex: 1;
           min-width: 0;
@@ -440,6 +445,13 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           flex-direction: column;
           gap: var(--space-2);
         }
+
+        .theater .player-area {
+          flex: 1;
+          min-height: 0;
+          width: 100%;
+        }
+
         .player-iframe-wrap {
           position: relative;
           width: 100%;
@@ -447,14 +459,22 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           background-color: #000;
           border-radius: var(--radius-md);
           overflow: hidden;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
         }
+
+        .theater .player-iframe-wrap {
+          width: 100%;
+          max-height: calc(100dvh - var(--nav-height) - 48px);
+          border-radius: 0;
+        }
+
         .player-iframe-target {
           position: absolute;
           inset: 0;
           width: 100%;
           height: 100%;
         }
-        .player-iframe-target iframe {
+        .player-iframe-target :global(iframe) {
           width: 100%;
           height: 100%;
           border: none;
@@ -479,73 +499,53 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           align-items: center;
           justify-content: center;
           padding: 1px 6px;
-          background-color: var(--bg-tertiary);
-          border: 1px solid var(--border);
+          background-color: var(--surface-2);
+          border: 1px solid var(--border-subtle);
           border-radius: var(--radius-sm);
-          font-family: var(--font-body);
+          font-family: inherit;
           font-size: 11px;
           font-weight: 600;
           color: var(--text-secondary);
           line-height: 1.6;
         }
 
-        /* Theater: shell fills viewport height, no padding overflow */
-        .theater .player-shell {
-          height: calc(100dvh - var(--nav-height));
-          max-width: 100%;
-          padding: var(--space-2) var(--space-4) 0;
-          overflow: hidden;
+        .player-panel-section {
+          width: 340px;
+          flex-shrink: 0;
         }
 
-        /* Theater: single-column, fill remaining height */
-        .theater .player-content {
-          flex: 1;
-          min-height: 0;
-          flex-direction: column;
-        }
-        .theater .player-area {
-          flex: 1;
-          min-height: 0;
-          width: 100%;
-        }
-
-        /* Theater: max-height drives sizing, aspect-ratio adjusts width proportionally */
-        .theater .player-iframe-wrap {
-          width: 100%;
-          max-height: calc(100dvh - var(--nav-height) - 48px);
-          border-radius: 0;
-        }
-
-        /* ── Saved Videos panel ── */
         .player-mobile-panel-toggle {
           display: none;
         }
+
         .player-saved-panel {
-          width: 340px;
-          flex-shrink: 0;
           display: flex;
           flex-direction: column;
           gap: var(--space-2);
           max-height: calc(100dvh - var(--nav-height) - 60px);
           overflow-y: auto;
           scrollbar-width: thin;
-          scrollbar-color: var(--border) transparent;
+          scrollbar-color: var(--border-subtle) transparent;
         }
+
         .panel-heading {
-          font-size: var(--text-sm);
-          font-weight: 600;
+          font-size: var(--text-xs);
+          font-weight: 700;
           color: var(--text-secondary);
           text-transform: uppercase;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.05em;
           padding-bottom: var(--space-2);
           border-bottom: 1px solid var(--border-subtle);
           flex-shrink: 0;
         }
+
         .panel-list {
           display: flex;
           flex-direction: column;
-          gap: var(--space-1);
+          gap: 4px;
+          list-style: none;
         }
+
         .panel-item {
           display: flex;
           align-items: flex-start;
@@ -555,23 +555,26 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           padding: var(--space-2);
           border-radius: var(--radius-md);
           background: transparent;
+          border: 1px solid transparent;
           color: var(--text-primary);
-          transition: background-color var(--transition-fast);
+          transition: background-color var(--transition-fast), border-color var(--transition-fast);
           cursor: pointer;
         }
         .panel-item:hover {
-          background-color: var(--bg-secondary);
+          background-color: var(--surface-2);
         }
         .panel-item-active {
-          background-color: var(--bg-tertiary);
+          background-color: var(--surface-2);
+          border-color: var(--accent);
         }
+
         .panel-thumb-wrap {
           position: relative;
           width: 100px;
           aspect-ratio: 16 / 9;
           border-radius: var(--radius-sm);
           overflow: hidden;
-          background-color: var(--bg-secondary);
+          background-color: var(--surface-2);
           flex-shrink: 0;
         }
         .panel-thumb {
@@ -594,8 +597,7 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           display: flex;
           align-items: center;
           justify-content: center;
-          background-color: rgba(0, 0, 0, 0.55);
-          font-size: 18px;
+          background-color: rgba(255, 30, 64, 0.7);
           color: #fff;
         }
         .panel-info {
@@ -609,24 +611,20 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           font-size: var(--text-xs);
           font-weight: 500;
           color: var(--text-primary);
-          line-height: 1.4;
+          line-height: 1.35;
         }
         .panel-channel {
           font-size: 11px;
           color: var(--text-muted);
         }
 
-        /* ── Tablet / Intermediate ── */
-        @media (max-width: 900px) {
-          .player-saved-panel {
-            width: 260px;
-          }
-        }
-
-        /* ── Mobile & Narrow Screens (<720px) ── */
-        @media (max-width: 720px) {
+        /* Responsive adjustments via Container Query */
+        @container player-container (max-width: 800px) {
           .player-content {
             flex-direction: column;
+          }
+          .player-panel-section {
+            width: 100%;
           }
           .player-mobile-panel-toggle {
             display: flex;
@@ -634,7 +632,7 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
             justify-content: space-between;
             width: 100%;
             padding: var(--space-3) var(--space-4);
-            background-color: var(--bg-secondary);
+            background-color: var(--surface-1);
             border-radius: var(--radius-md);
             color: var(--text-primary);
             font-size: var(--text-sm);
@@ -646,7 +644,7 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           .toggle-chevron {
             display: flex;
             align-items: center;
-            transition: transform 0.2s ease;
+            transition: transform 200ms ease;
           }
           .toggle-chevron.open {
             transform: rotate(180deg);
@@ -655,10 +653,11 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
             display: none;
             width: 100%;
             max-height: 300px;
-            background-color: var(--bg-secondary);
+            background-color: var(--surface-1);
             border-radius: var(--radius-md);
             padding: var(--space-3);
             margin-top: var(--space-1);
+            border: 1px solid var(--border-subtle);
           }
           .player-saved-panel.mobile-open {
             display: flex;
@@ -671,11 +670,11 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           }
         }
 
-        /* ── Landscape Mobile / Short Viewports ── */
+        /* Short Viewports (Landscape Mobile, short windows) */
         @media (max-height: 520px) {
           .player-overlay {
-            padding-top: max(4px, var(--safe-top));
-            padding-bottom: max(4px, var(--safe-bottom));
+            padding-top: max(4px, env(safe-area-inset-top, 0px));
+            padding-bottom: max(4px, env(safe-area-inset-bottom, 0px));
           }
           .player-shell {
             padding: 0 var(--space-2) var(--space-2);
@@ -696,12 +695,12 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
           }
         }
 
-        /* ── Touch devices: hide keyboard hint & enlarge tap targets ── */
         @media (hover: none) {
           .player-shortcut-hint {
             display: none;
           }
         }
+
         @media (pointer: coarse) {
           .player-ctrl-btn {
             min-width: 44px;
@@ -715,73 +714,3 @@ export default function VideoPlayer({ videoId, savedVideos, onClose, onVideoSwap
     </div>
   );
 }
-
-// ── Icons ─────────────────────────────────────────────────────────────────────
-
-function TheaterIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {active ? (
-        // Theater active: narrow rectangle (exit theater)
-        <>
-          <rect x="2" y="7" width="20" height="10" rx="2" />
-        </>
-      ) : (
-        // Theater inactive: wide rectangle
-        <>
-          <rect x="2" y="5" width="20" height="14" rx="2" />
-        </>
-      )}
-    </svg>
-  );
-}
-
-function FullscreenIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {active ? (
-        // Exit fullscreen
-        <>
-          <polyline points="8 3 3 3 3 8" />
-          <polyline points="21 8 21 3 16 3" />
-          <polyline points="3 16 3 21 8 21" />
-          <polyline points="16 21 21 21 21 16" />
-        </>
-      ) : (
-        // Enter fullscreen
-        <>
-          <polyline points="15 3 21 3 21 9" />
-          <polyline points="9 21 3 21 3 15" />
-          <line x1="21" y1="3" x2="14" y2="10" />
-          <line x1="3" y1="21" x2="10" y2="14" />
-        </>
-      )}
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
-}
-
-function PanelPlayIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <polygon points="5 3 19 12 5 21 5 3" />
-    </svg>
-  );
-}
-
-function ChevronDownIconSmall() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  );
-}
-

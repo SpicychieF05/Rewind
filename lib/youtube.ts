@@ -12,6 +12,12 @@ export type Timeframe =
   | '1month' | '2months' | '3months' | '6months' | '12months'
   | '1year' | '2years' | '3years' | '4years' | '5years';
 
+export interface SearchTimelineParams {
+  timeframe?: Timeframe;
+  date?: string; // YYYY-MM-DD
+  tzOffset?: number; // in minutes
+}
+
 export interface VideoResult {
   videoId: string;
   title: string;
@@ -40,14 +46,28 @@ function getApiKey(): string {
   return key;
 }
 
+function normalizeTimeline(timelineOrTimeframe: Timeframe | SearchTimelineParams): SearchTimelineParams {
+  if (typeof timelineOrTimeframe === 'string') {
+    return { timeframe: timelineOrTimeframe === '12months' ? '1year' : timelineOrTimeframe };
+  }
+  if (timelineOrTimeframe.timeframe === '12months') {
+    return { ...timelineOrTimeframe, timeframe: '1year' };
+  }
+  return timelineOrTimeframe;
+}
+
 function buildCacheKey(
   channelId: string,
   query: string,
   matchMode: MatchMode,
-  timeframe: Timeframe,
+  timeline: SearchTimelineParams,
   pageToken: string,
 ): string {
-  return `${channelId}|${query.toLowerCase().trim()}|${matchMode}|${timeframe}|${pageToken}`;
+  if (timeline.date) {
+    return `${channelId}|${query.toLowerCase().trim()}|${matchMode}|date:${timeline.date}:${timeline.tzOffset ?? 0}|${pageToken}`;
+  }
+  const tf = timeline.timeframe ?? '1year';
+  return `${channelId}|${query.toLowerCase().trim()}|${matchMode}|${tf}|${pageToken}`;
 }
 
 function timeframeToDate(timeframe: Timeframe): Date {
@@ -166,10 +186,11 @@ export async function searchVideos(
   channelLogo: string,
   query: string,
   matchMode: MatchMode,
-  timeframe: Timeframe,
+  timelineInput: Timeframe | SearchTimelineParams,
   pageToken: string = '',
 ): Promise<SearchResponse> {
-  const cacheKey = buildCacheKey(channelId, query, matchMode, timeframe, pageToken);
+  const timeline = normalizeTimeline(timelineInput);
+  const cacheKey = buildCacheKey(channelId, query, matchMode, timeline, pageToken);
 
   // 1. Check DB cache
   const cached = await getCached(cacheKey);
@@ -194,9 +215,23 @@ export async function searchVideos(
     };
   }
 
-  // 3. Call search.list
+  // 3. Compute publishedAfter and optional publishedBefore
+  let publishedAfter: string;
+  let publishedBefore: string | undefined;
+
+  if (timeline.date) {
+    // Known limitation (documented per PRD §7.6): on a DST-transition day the day boundary can be off by 1 hour
+    const [y, m, d] = timeline.date.split('-').map(Number);
+    const tzOffset = timeline.tzOffset ?? 0;
+    const start = Date.UTC(y, m - 1, d) + tzOffset * 60000;
+    publishedAfter = new Date(start).toISOString();
+    publishedBefore = new Date(start + 24 * 60 * 60 * 1000 - 1000).toISOString();
+  } else {
+    publishedAfter = timeframeToDate(timeline.timeframe ?? '1year').toISOString();
+  }
+
+  // 4. Call search.list
   const apiKey = getApiKey();
-  const publishedAfter = timeframeToDate(timeframe).toISOString();
   const params = new URLSearchParams({
     part: 'snippet',
     channelId,
@@ -206,6 +241,9 @@ export async function searchVideos(
     publishedAfter,
     key: apiKey,
   });
+  if (publishedBefore) {
+    params.set('publishedBefore', publishedBefore);
+  }
   if (pageToken) params.set('pageToken', pageToken);
 
   const res = await fetch(`${YT_API_BASE}/search?${params}`, { cache: 'no-store' });
@@ -224,14 +262,14 @@ export async function searchVideos(
   const items = data.items ?? [];
   const nextPageToken = data.nextPageToken ?? null;
 
-  // 4. Fetch full stats for matched IDs
+  // 5. Fetch full stats for matched IDs
   const videoIds = items
     .filter((item) => (item.id as Record<string, unknown>).kind === 'youtube#video')
     .map((item) => (item.id as Record<string, unknown>).videoId as string);
 
   const detailMap = await fetchVideoDetails(videoIds);
 
-  // 5. Build result list + apply local filtering for exact-match
+  // 6. Build result list + apply local filtering for exact-match
   let videos: VideoResult[] = videoIds.map((id) => {
     const d = detailMap.get(id);
     return {
@@ -253,7 +291,7 @@ export async function searchVideos(
     videos = videos.filter((v) => v.title.toLowerCase().includes(lower));
   }
 
-  // 6. Write to cache
+  // 7. Write to cache
   await setCache(cacheKey, videos);
 
   const freshQuotaUsed = await getTodayQuotaUsed();

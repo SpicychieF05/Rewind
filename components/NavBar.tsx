@@ -1,49 +1,82 @@
 'use client';
 
+import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState, useRef, useEffect } from 'react';
-import type { VideoResult } from '@/lib/youtube';
+import { Search, Bookmark, Library, LogOut, ArrowLeft, X } from 'lucide-react';
 import { authClient } from '@/lib/auth/client';
+import type { VideoResult } from '@/lib/youtube';
+import Icon from '@/components/ui/Icon';
+import IconButton from '@/components/ui/IconButton';
 
 export default function NavBar() {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, isPending: isAuthPending } = authClient.useSession();
+  const isAuthenticated = !!session?.user;
 
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // Search states
   const [navQuery, setNavQuery] = useState('');
+  const [searchOverlayOpen, setSearchOverlayOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [results, setResults] = useState<VideoResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
-  const inputRef = useRef<HTMLInputElement>(null);
-  const searchBoxRef = useRef<HTMLDivElement>(null);
-  const mobileSearchBoxRef = useRef<HTMLDivElement>(null);
+  // Avatar menu popover
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
 
+  const desktopSearchRef = useRef<HTMLDivElement>(null);
+  const desktopInputRef = useRef<HTMLInputElement>(null);
+  const overlayInputRef = useRef<HTMLInputElement>(null);
+  const avatarMenuRef = useRef<HTMLDivElement>(null);
+  const avatarBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Focus overlay input when opened
   useEffect(() => {
-    if (searchOpen) inputRef.current?.focus();
-  }, [searchOpen]);
+    if (searchOverlayOpen) {
+      document.body.style.overflow = 'hidden';
+      setTimeout(() => overlayInputRef.current?.focus(), 50);
+    } else {
+      document.body.style.overflow = '';
+    }
+  }, [searchOverlayOpen]);
 
-  // Click outside listener to close dropdown
+  // Click outside to close desktop dropdown and avatar menu
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (
-        searchBoxRef.current &&
-        !searchBoxRef.current.contains(e.target as Node) &&
-        mobileSearchBoxRef.current &&
-        !mobileSearchBoxRef.current.contains(e.target as Node)
-      ) {
+      const target = e.target as Node;
+      if (desktopSearchRef.current && !desktopSearchRef.current.contains(target)) {
         setDropdownOpen(false);
       }
+      if (
+        avatarMenuRef.current &&
+        !avatarMenuRef.current.contains(target) &&
+        avatarBtnRef.current &&
+        !avatarBtnRef.current.contains(target)
+      ) {
+        setAvatarMenuOpen(false);
+      }
     };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setDropdownOpen(false);
+        setSearchOverlayOpen(false);
+        setAvatarMenuOpen(false);
+      }
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
-  // Debounced search for saved videos by title
+  // Debounced search for saved videos
   useEffect(() => {
     const trimmed = navQuery.trim();
     if (!trimmed) {
@@ -55,8 +88,7 @@ export default function NavBar() {
       return () => clearTimeout(timer);
     }
 
-    // If user is not signed in, do not query /api/videos (which requires session)
-    if (!session?.user) {
+    if (!isAuthenticated) {
       const timer = setTimeout(() => {
         setResults([]);
         setIsSearching(false);
@@ -84,14 +116,14 @@ export default function NavBar() {
     }, 200);
 
     return () => clearTimeout(timer);
-  }, [navQuery, session]);
+  }, [navQuery, isAuthenticated]);
 
-  const handleNavSearch = (e: React.FormEvent) => {
+  const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const query = navQuery.trim();
     if (query) {
       setDropdownOpen(false);
-      setSearchOpen(false);
+      setSearchOverlayOpen(false);
       router.push(`/saved?q=${encodeURIComponent(query)}`);
     }
   };
@@ -99,7 +131,7 @@ export default function NavBar() {
   const handleGoToChannelSearch = () => {
     const query = navQuery.trim();
     setDropdownOpen(false);
-    setSearchOpen(false);
+    setSearchOverlayOpen(false);
     if (query) {
       router.push(`/?q=${encodeURIComponent(query)}`);
     } else {
@@ -108,27 +140,32 @@ export default function NavBar() {
   };
 
   const renderDropdownContent = () => {
-    if (!session?.user) {
+    if (!isAuthenticated) {
       return (
         <div className="nav-dropdown-empty" role="status">
-          <div className="empty-icon-wrap">
-            <BookmarkIcon />
+          <div className="empty-icon-circle">
+            <Icon as={Bookmark} size={22} />
           </div>
           <p className="empty-title">Sign in to search saved videos</p>
           <p className="empty-desc">
-            Your saved library and playlists are private to your account. Sign in to view and search your saved videos.
+            Your saved library and playlists are private. Sign in to view and search saved videos.
           </p>
-          <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-2)', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <div className="empty-actions">
             <Link
               href="/auth/sign-in"
-              className="btn btn-primary btn-sm empty-action-btn"
-              onClick={() => { setDropdownOpen(false); setSearchOpen(false); }}
+              className="btn btn-primary"
+              style={{ height: '34px', fontSize: 'var(--text-xs)' }}
+              onClick={() => {
+                setDropdownOpen(false);
+                setSearchOverlayOpen(false);
+              }}
             >
               Sign In
             </Link>
             <button
               type="button"
-              className="btn btn-secondary btn-sm empty-action-btn"
+              className="btn btn-secondary"
+              style={{ height: '34px', fontSize: 'var(--text-xs)' }}
               onClick={handleGoToChannelSearch}
             >
               Search Channel on Home
@@ -150,19 +187,20 @@ export default function NavBar() {
     if (hasSearched && results.length === 0) {
       return (
         <div className="nav-dropdown-empty" role="status">
-          <div className="empty-icon-wrap">
-            <BookmarkIcon />
+          <div className="empty-icon-circle">
+            <Icon as={Bookmark} size={22} />
           </div>
           <p className="empty-title">No saved videos found</p>
           <p className="empty-desc">
-            No saved videos match <strong className="query-highlight">&ldquo;{navQuery.trim()}&rdquo;</strong>. Search a channel&apos;s videos on the home page first to find and save them!
+            No saved videos match <strong style={{ color: 'var(--text-primary)' }}>&ldquo;{navQuery.trim()}&rdquo;</strong>.
           </p>
           <button
             type="button"
-            className="btn btn-primary btn-sm empty-action-btn"
+            className="btn btn-secondary"
+            style={{ height: '34px', fontSize: 'var(--text-xs)' }}
             onClick={handleGoToChannelSearch}
           >
-            <SearchIcon />
+            <Icon as={Search} size={14} />
             <span>Search Channel Videos on Home</span>
           </button>
         </div>
@@ -173,59 +211,61 @@ export default function NavBar() {
       return (
         <div className="nav-dropdown-results">
           <div className="dropdown-header">
-            <span className="dropdown-title">Saved Videos ({results.length})</span>
+            <span>Saved Videos ({results.length})</span>
             <Link
               href={`/saved?q=${encodeURIComponent(navQuery.trim())}`}
-              onClick={() => setDropdownOpen(false)}
-              className="dropdown-view-all-link"
+              onClick={() => {
+                setDropdownOpen(false);
+                setSearchOverlayOpen(false);
+              }}
+              className="dropdown-view-all"
             >
               View in Saved
             </Link>
           </div>
-          <ul className="dropdown-list">
+
+          <ul id="nav-dropdown-results-list" className="dropdown-list" role="listbox">
             {results.slice(0, 5).map((vid) => (
-              <li key={vid.videoId}>
+              <li key={vid.videoId} role="option" aria-selected="false">
                 <Link
                   href={`/saved?q=${encodeURIComponent(navQuery.trim())}`}
                   className="dropdown-item"
-                  onClick={() => { setDropdownOpen(false); setSearchOpen(false); }}
-                  aria-label={`View "${vid.title}" in Saved library`}
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    setSearchOverlayOpen(false);
+                  }}
                 >
-                  <div className="dropdown-thumb-wrap">
+                  <div className="dropdown-thumb-box">
                     {vid.thumbnail ? (
-                      <img
-                        src={vid.thumbnail}
-                        alt={vid.title}
-                        className="dropdown-thumb"
-                        width={56}
-                        height={32}
-                      />
+                      <img src={vid.thumbnail} alt="" className="dropdown-thumb" width={64} height={36} />
                     ) : (
-                      <div className="dropdown-thumb-placeholder">▶</div>
+                      <div className="dropdown-thumb-fallback">▶</div>
                     )}
                   </div>
                   <div className="dropdown-item-info">
                     <span className="dropdown-item-title line-clamp-2">{vid.title}</span>
-                    <span className="dropdown-item-channel">{vid.channelName || 'YouTube'}</span>
+                    <span className="dropdown-item-channel">{vid.channelName}</span>
                   </div>
-                  <span className="dropdown-go-icon" aria-hidden="true">›</span>
                 </Link>
               </li>
             ))}
           </ul>
+
           {results.length > 5 && (
             <div className="dropdown-footer">
               <Link
                 href={`/saved?q=${encodeURIComponent(navQuery.trim())}`}
-                onClick={() => setDropdownOpen(false)}
-                className="dropdown-footer-btn"
+                onClick={() => {
+                  setDropdownOpen(false);
+                  setSearchOverlayOpen(false);
+                }}
+                className="dropdown-footer-link"
               >
                 View all {results.length} saved results →
               </Link>
             </div>
           )}
         </div>
-
       );
     }
 
@@ -234,13 +274,12 @@ export default function NavBar() {
 
   return (
     <>
-      <nav className="navbar" role="navigation" aria-label="Main navigation">
-        <div className="navbar-inner" suppressHydrationWarning>
-
-          {/* Left: Logo */}
+      <header className="navbar-root" role="banner">
+        <div className="navbar-container">
+          {/* 1. Left: Rewind Brand Logo (Badge left of wordmark) */}
           <Link href="/" className="navbar-logo" aria-label="Rewind home">
             <svg
-              className="navbar-logo-icon"
+              className="navbar-logo-badge"
               width="32"
               height="22"
               viewBox="0 0 32 22"
@@ -265,7 +304,6 @@ export default function NavBar() {
                 strokeWidth="1"
                 fill="none"
               />
-              {/* Rewind double triangles pointing left */}
               <path
                 d="M9.3 10.38C8.9 10.68 8.9 11.32 9.3 11.62L14.4 15.35C14.88 15.7 15.5 15.35 15.5 14.73V7.27C15.5 6.65 14.88 6.3 14.4 6.65L9.3 10.38Z"
                 fill="white"
@@ -278,24 +316,16 @@ export default function NavBar() {
             <span className="navbar-logo-text">Rewind</span>
           </Link>
 
-          {/* Centre: Search bar for saved videos */}
-          <div
-            ref={searchBoxRef}
-            className={`navbar-search-container ${searchOpen ? 'search-open' : ''}`}
-            suppressHydrationWarning
-          >
-            <form
-              className="navbar-search-form"
-              onSubmit={handleNavSearch}
-              role="search"
-              aria-label="Search saved videos"
-            >
-              <div className="navbar-search-box" suppressHydrationWarning>
+          {/* 2. Center: Search Pill (Wide & Medium containers) */}
+          {/* On homepage, pill is visually de-emphasized so the main search form stays primary */}
+          <div ref={desktopSearchRef} className={`navbar-search-pill-wrap ${pathname === '/' ? 'pill-home' : ''}`}>
+            <form onSubmit={handleSearchSubmit} className="search-pill-form" role="search" aria-label="Search saved videos">
+              <div className="search-pill">
                 <input
-                  ref={inputRef}
+                  ref={desktopInputRef}
                   id="nav-search-input"
                   type="search"
-                  className="navbar-search-input"
+                  className="search-pill-input"
                   placeholder="Search saved videos by title…"
                   value={navQuery}
                   onChange={(e) => {
@@ -306,28 +336,33 @@ export default function NavBar() {
                     if (navQuery.trim()) setDropdownOpen(true);
                   }}
                   aria-label="Search saved videos"
+                  role="combobox"
+                  aria-expanded={dropdownOpen && !!navQuery.trim()}
+                  aria-autocomplete="list"
+                  aria-controls="nav-dropdown-results-list"
                 />
                 {navQuery && (
                   <button
                     type="button"
-                    className="navbar-search-clear-btn"
+                    className="search-pill-clear"
                     onClick={() => {
                       setNavQuery('');
                       setDropdownOpen(false);
-                      inputRef.current?.focus();
+                      desktopInputRef.current?.focus();
                     }}
                     aria-label="Clear search input"
                   >
-                    <CloseIconSmall />
+                    <Icon as={X} size={14} />
                   </button>
                 )}
+                <div className="search-pill-divider" aria-hidden="true" />
                 <button
                   type="submit"
-                  className="navbar-search-btn"
+                  className="search-pill-submit"
                   aria-label="Search saved videos"
                   title="Search saved videos"
                 >
-                  <SearchIcon />
+                  <Icon as={Search} size={16} anim="wiggle" />
                 </button>
               </div>
             </form>
@@ -340,385 +375,525 @@ export default function NavBar() {
             )}
           </div>
 
-          {/* Right: actions */}
-          <div className="navbar-actions" suppressHydrationWarning>
-            {/* Mobile: search icon */}
+          {/* 3. Right Actions: Saved Pill, Search Toggle, Auth/Avatar */}
+          <div className="navbar-actions">
+            {/* Narrow search button trigger */}
             <button
+              type="button"
               id="nav-search-toggle"
-              className="btn-icon navbar-mobile-search"
+              className="navbar-search-toggle-btn"
               onClick={() => {
-                setSearchOpen((v) => !v);
-                setDropdownOpen(true);
+                setSearchOverlayOpen(true);
               }}
               aria-label="Open search"
-              aria-expanded={searchOpen}
+              aria-expanded={searchOverlayOpen}
             >
-              <SearchIcon />
+              <Icon as={Search} size={18} anim="wiggle" />
             </button>
 
-            {/* Saved link */}
-            <Link
-              href="/saved"
-              id="nav-saved-btn"
-              className={`btn btn-secondary navbar-saved-btn ${pathname === '/saved' ? 'active' : ''}`}
-              aria-current={pathname === '/saved' ? 'page' : undefined}
-            >
-              <BookmarkIcon />
-              <span>Saved</span>
-            </Link>
+            {/* Saved Library Pill (Hidden when logged out, per finding #7) */}
+            {isAuthenticated && (
+              <Link
+                href="/saved"
+                id="nav-saved-btn"
+                className={`navbar-saved-pill ${pathname === '/saved' ? 'active' : ''}`}
+                aria-current={pathname === '/saved' ? 'page' : undefined}
+                aria-label="Saved Library"
+              >
+                <Icon as={Bookmark} size={16} anim="pop" />
+                <span className="saved-pill-label">Saved</span>
+              </Link>
+            )}
 
-            {/* Auth Session Controls */}
+            {/* Auth Session State */}
             {isAuthPending ? (
               <div className="navbar-auth-skeleton" aria-hidden="true" />
-            ) : !session?.user ? (
+            ) : !isAuthenticated ? (
               <Link
                 href="/auth/sign-in"
                 id="nav-signin-btn"
-                className="btn btn-primary navbar-signin-btn"
+                className="btn btn-secondary nav-signin-btn"
               >
                 Sign In
               </Link>
             ) : (
-              <div className="navbar-user-menu">
-                <div
-                  className="navbar-user-avatar"
-                  title={session.user.name || session.user.email || 'Account'}
+              <div className="navbar-user-wrap">
+                <button
+                  ref={avatarBtnRef}
+                  type="button"
+                  id="nav-user-avatar-btn"
+                  className="navbar-avatar-btn"
+                  onClick={() => setAvatarMenuOpen((prev) => !prev)}
+                  aria-label="Account menu"
+                  aria-expanded={avatarMenuOpen}
+                  aria-haspopup="menu"
                 >
                   {session.user.image ? (
                     <img
                       src={session.user.image}
                       alt={session.user.name || 'User avatar'}
-                      className="navbar-avatar-img"
-                      width={32}
-                      height={32}
+                      className="avatar-img"
+                      width={36}
+                      height={36}
                     />
                   ) : (
-                    <span>{((session.user.name || session.user.email || 'U')[0]).toUpperCase()}</span>
+                    <span className="avatar-initial">
+                      {((session.user.name || session.user.email || 'U')[0]).toUpperCase()}
+                    </span>
                   )}
-                </div>
-                <button
-                  type="button"
-                  id="nav-signout-btn"
-                  className="btn btn-ghost navbar-signout-btn"
-                  onClick={async () => {
-                    await authClient.signOut();
-                    router.refresh();
-                  }}
-                  title="Sign out"
-                  aria-label="Sign out"
-                >
-                  Sign Out
                 </button>
-              </div>
-            )}
 
-            {/* Mobile menu toggle */}
-            <button
-              id="nav-menu-toggle"
-              className="btn-icon navbar-mobile-menu"
-              onClick={() => setMobileMenuOpen((v) => !v)}
-              aria-label="Toggle menu"
-              aria-expanded={mobileMenuOpen}
-            >
-              <MenuIcon />
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile menu drawer & overlay */}
-        {mobileMenuOpen && (
-          <div
-            className="navbar-mobile-backdrop"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setMobileMenuOpen(false);
-            }}
-          >
-            <div className="navbar-mobile-drawer" role="dialog" aria-modal="true" aria-label="Mobile navigation menu">
-              <div className="drawer-header">
-                <span className="drawer-title">Navigation</span>
-                <button
-                  type="button"
-                  className="btn-icon drawer-close-btn"
-                  onClick={() => setMobileMenuOpen(false)}
-                  aria-label="Close menu"
-                >
-                  <CloseIconSmall />
-                </button>
-              </div>
-              <Link
-                href="/saved"
-                className={`navbar-mobile-link ${pathname === '/saved' ? 'active' : ''}`}
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <BookmarkIcon />
-                <span>Saved Library</span>
-              </Link>
-              <div className="navbar-mobile-auth">
-                {isAuthPending ? (
-                  <div className="navbar-auth-skeleton w-full" />
-                ) : !session?.user ? (
-                  <Link
-                    href="/auth/sign-in"
-                    className="btn btn-primary w-full"
-                    onClick={() => setMobileMenuOpen(false)}
+                {/* Avatar Menu Popover */}
+                {avatarMenuOpen && (
+                  <div
+                    ref={avatarMenuRef}
+                    className="avatar-menu-popover"
+                    role="menu"
+                    aria-label="Account options"
                   >
-                    Sign In / Sign Up
-                  </Link>
-                ) : (
-                  <div className="navbar-mobile-user">
-                    <div className="navbar-mobile-user-info">
-                      <div className="navbar-user-avatar">
+                    <div className="avatar-menu-header">
+                      <div className="menu-avatar-circle">
                         {session.user.image ? (
-                          <img src={session.user.image} alt={session.user.name || 'Avatar'} className="navbar-avatar-img" />
+                          <img src={session.user.image} alt="" className="avatar-img" />
                         ) : (
                           <span>{((session.user.name || session.user.email || 'U')[0]).toUpperCase()}</span>
                         )}
                       </div>
-                      <span className="navbar-mobile-user-name">{session.user.name || session.user.email}</span>
+                      <div className="menu-user-details">
+                        <span className="menu-user-name truncate">{session.user.name || 'User'}</span>
+                        <span className="menu-user-email truncate">{session.user.email}</span>
+                      </div>
                     </div>
+
+                    <div className="avatar-menu-divider" />
+
+                    {/* Saved Library menu item */}
+                    <Link
+                      href="/saved"
+                      className={`avatar-menu-item ${pathname === '/saved' ? 'active' : ''}`}
+                      role="menuitem"
+                      onClick={() => setAvatarMenuOpen(false)}
+                    >
+                      <Icon as={Library} size={16} anim="tick" />
+                      <span>Saved Library</span>
+                    </Link>
+
+                    {/* Sign out item */}
                     <button
                       type="button"
-                      className="btn btn-secondary w-full"
+                      className="avatar-menu-item signout-item"
+                      role="menuitem"
                       onClick={async () => {
-                        setMobileMenuOpen(false);
+                        setAvatarMenuOpen(false);
                         await authClient.signOut();
                         router.refresh();
                       }}
                     >
-                      Sign Out
+                      <Icon as={LogOut} size={16} anim="nudge-x" />
+                      <span>Sign Out</span>
                     </button>
                   </div>
                 )}
               </div>
-            </div>
+            )}
           </div>
-        )}
+        </div>
+      </header>
 
-        {/* Mobile / Compact: Option A Fullscreen Search Overlay */}
-        {searchOpen && (
-          <div
-            ref={mobileSearchBoxRef}
-            className="navbar-fullscreen-search"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Search saved videos"
-          >
-            <div className="fullscreen-search-bar">
-              <button
-                type="button"
-                className="btn-icon search-back-btn"
-                onClick={() => {
-                  setSearchOpen(false);
-                  setDropdownOpen(false);
+      {/* Narrow Screen Search Overlay */}
+      {searchOverlayOpen && (
+        <div className="search-overlay" role="dialog" aria-modal="true" aria-label="Search saved videos">
+          <div className="search-overlay-bar">
+            <IconButton
+              aria-label="Close search"
+              onClick={() => {
+                setSearchOverlayOpen(false);
+                setDropdownOpen(false);
+              }}
+            >
+              <Icon as={ArrowLeft} size={20} anim="nudge-x" />
+            </IconButton>
+
+            <form onSubmit={handleSearchSubmit} className="search-overlay-form" role="search">
+              <input
+                ref={overlayInputRef}
+                type="search"
+                className="search-overlay-input"
+                placeholder="Search saved videos by title…"
+                value={navQuery}
+                onChange={(e) => {
+                  setNavQuery(e.target.value);
+                  setDropdownOpen(true);
                 }}
-                aria-label="Close search"
-                title="Back"
-              >
-                <ArrowLeftIcon />
-              </button>
-              <form onSubmit={handleNavSearch} className="fullscreen-search-form" role="search">
-                <input
-                  ref={inputRef}
-                  type="search"
-                  className="fullscreen-search-input"
-                  placeholder="Search saved videos by title…"
-                  value={navQuery}
-                  onChange={(e) => {
-                    setNavQuery(e.target.value);
-                    setDropdownOpen(true);
+                aria-label="Search saved videos"
+              />
+              {navQuery && (
+                <IconButton
+                  aria-label="Clear input"
+                  size="sm"
+                  onClick={() => {
+                    setNavQuery('');
+                    setDropdownOpen(false);
+                    overlayInputRef.current?.focus();
                   }}
-                  autoFocus
-                  aria-label="Search saved videos"
-                />
-                {navQuery && (
-                  <button
-                    type="button"
-                    className="fullscreen-search-clear"
-                    onClick={() => {
-                      setNavQuery('');
-                      setDropdownOpen(false);
-                      inputRef.current?.focus();
-                    }}
-                    aria-label="Clear search input"
-                  >
-                    <CloseIconSmall />
-                  </button>
-                )}
-                <button
-                  type="submit"
-                  className="fullscreen-search-submit"
-                  aria-label="Search"
-                  title="Search saved videos"
                 >
-                  <SearchIcon />
-                </button>
-              </form>
-            </div>
-
-            <div className="fullscreen-search-content">
-              {navQuery.trim() ? (
-                renderDropdownContent()
-              ) : (
-                <div className="fullscreen-search-empty">
-                  <BookmarkIcon />
-                  <p className="empty-title">Search your saved videos</p>
-                  <p className="empty-desc">
-                    Type video title keywords to quickly find and jump to videos in your library.
-                  </p>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm empty-action-btn"
-                    onClick={handleGoToChannelSearch}
-                  >
-                    Search Channel Videos on Home
-                  </button>
-                </div>
+                  <Icon as={X} size={16} />
+                </IconButton>
               )}
-            </div>
+            </form>
           </div>
-        )}
-      </nav>
+
+          <div className="search-overlay-content">
+            {navQuery.trim() ? (
+              renderDropdownContent()
+            ) : (
+              <div className="search-overlay-hint">
+                <Icon as={Bookmark} size={36} />
+                <p className="hint-title">Search Saved Videos</p>
+                <p className="hint-desc">Type keywords from video titles to search and jump to videos in your library.</p>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ height: '36px', fontSize: 'var(--text-xs)' }}
+                  onClick={handleGoToChannelSearch}
+                >
+                  Search Channel Videos on Home
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
-        .navbar {
+        .navbar-root {
           position: fixed;
           top: 0;
           left: 0;
           right: 0;
-          height: var(--nav-height);
-          background-color: var(--bg-primary);
+          height: calc(var(--nav-height) + var(--safe-top));
+          padding-top: var(--safe-top);
+          background-color: rgba(15, 15, 15, 0.84);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
           border-bottom: 1px solid var(--border-subtle);
-          z-index: 100;
+          z-index: var(--z-nav);
         }
-        .navbar-inner {
+
+        @supports not (backdrop-filter: blur(1px)) {
+          .navbar-root {
+            background-color: #0f0f0f;
+          }
+        }
+
+        .navbar-container {
+          container-type: inline-size;
+          container-name: nav-container;
           display: flex;
           align-items: center;
-          gap: var(--space-4);
+          justify-content: space-between;
           height: 100%;
-          padding: 0 var(--space-4);
           max-width: var(--content-max-width);
           margin: 0 auto;
+          padding: 0 max(var(--space-4), var(--safe-left)) 0 max(var(--space-4), var(--safe-right));
+          gap: var(--space-4);
         }
+
+        /* 1. Logo Row: badge left of wordmark, horizontal row */
         .navbar-logo {
-          display: inline-flex;
+          display: flex;
+          flex-direction: row;
           align-items: center;
           gap: 10px;
           flex-shrink: 0;
-          text-decoration: none;
           user-select: none;
-          transition: opacity var(--transition-fast);
+          text-decoration: none;
         }
-        .navbar-logo:hover {
-          opacity: 0.95;
-        }
-        .navbar-logo-icon {
-          display: block;
+        :global(.navbar-logo-badge) {
           flex-shrink: 0;
-          transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.22s ease;
+          display: block;
+          transition: transform 220ms var(--ease-spring), filter 220ms ease;
         }
-        .navbar-logo:hover .navbar-logo-icon {
+        .navbar-logo:hover :global(.navbar-logo-badge) {
           transform: scale(1.05);
-          filter: drop-shadow(0 2px 10px rgba(255, 30, 64, 0.45));
+          filter: drop-shadow(0 2px 8px rgba(255, 30, 64, 0.45));
         }
         .navbar-logo-text {
-          font-size: 1.18rem;
+          font-size: clamp(1.1rem, 0.95rem + 0.4vw, 1.25rem);
           font-weight: 700;
           color: var(--text-primary);
-          letter-spacing: -0.5px;
+          letter-spacing: -0.4px;
           line-height: 1;
         }
-        .navbar-search-container {
+
+        /* 2. Search Pill */
+        .navbar-search-pill-wrap {
           position: relative;
           flex: 1;
           max-width: 640px;
           margin: 0 auto;
         }
-        .navbar-search-form {
+        /* Homepage: de-emphasize the saved-video search pill so the main
+           channel-search form on the page is the clear primary entry point */
+        .navbar-search-pill-wrap.pill-home {
+          max-width: 320px;
+          opacity: 0.7;
+          transition: opacity var(--transition-fast), max-width var(--transition-fast);
+        }
+        .navbar-search-pill-wrap.pill-home:focus-within {
+          opacity: 1;
+          max-width: 440px;
+        }
+        .search-pill-form {
           width: 100%;
         }
-        .navbar-search-box {
+        .search-pill {
           display: flex;
           align-items: center;
+          background-color: var(--surface-2);
           border: 1px solid var(--border);
           border-radius: var(--radius-full);
+          height: var(--control-h);
           overflow: hidden;
-          background-color: var(--bg-primary);
           transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
         }
-        .navbar-search-box:focus-within {
-          border-color: #1c62b9;
-          box-shadow: 0 0 0 1px #1c62b9;
+        .search-pill:focus-within {
+          border-color: var(--text-secondary);
+          box-shadow: 0 0 0 3px var(--accent-subtle);
         }
-        .navbar-search-input {
+        .search-pill-input {
           flex: 1;
+          height: 100%;
           background: transparent;
           border: none;
           outline: none;
-          padding: var(--space-2) var(--space-4);
+          padding: 0 var(--space-3) 0 var(--space-4);
           color: var(--text-primary);
-          font-size: var(--text-base);
+          font-size: var(--text-sm);
           min-width: 0;
         }
-        .navbar-search-input::placeholder {
+        .search-pill-input::placeholder {
           color: var(--text-muted);
         }
-        .navbar-search-clear-btn {
-          display: flex;
+        .search-pill-clear {
+          display: inline-flex;
           align-items: center;
           justify-content: center;
           padding: 0 var(--space-2);
           color: var(--text-muted);
-          cursor: pointer;
           transition: color var(--transition-fast);
         }
-        .navbar-search-clear-btn:hover {
+        .search-pill-clear:hover {
           color: var(--text-primary);
         }
-        .navbar-search-btn {
-          display: flex;
+        .search-pill-divider {
+          width: 1px;
+          height: 22px;
+          background-color: var(--border);
+          flex-shrink: 0;
+        }
+        .search-pill-submit {
+          display: inline-flex;
           align-items: center;
           justify-content: center;
           padding: 0 var(--space-4);
-          height: 38px;
-          background-color: var(--bg-secondary);
-          border-left: 1px solid var(--border);
-          color: var(--text-primary);
-          cursor: pointer;
-          transition: background-color var(--transition-fast);
+          height: 100%;
+          background-color: var(--surface-3);
+          color: var(--text-secondary);
+          transition: background-color var(--transition-fast), color var(--transition-fast);
+          flex-shrink: 0;
         }
-        .navbar-search-btn:hover {
-          background-color: var(--bg-hover);
+        .search-pill-submit:hover {
+          background-color: var(--surface-4);
+          color: var(--text-primary);
         }
 
-        /* Autocomplete dropdown */
+        /* 3. Actions */
+        .navbar-actions {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+          flex-shrink: 0;
+        }
+
+        .navbar-search-toggle-btn {
+          display: none;
+          align-items: center;
+          justify-content: center;
+          width: 36px;
+          height: 36px;
+          border-radius: var(--radius-full);
+          color: var(--text-primary);
+          background: transparent;
+          transition: background-color var(--transition-fast);
+        }
+        .navbar-search-toggle-btn:hover {
+          background-color: var(--surface-2);
+        }
+
+        .navbar-saved-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: var(--space-2);
+          height: var(--control-h);
+          padding: 0 var(--space-4);
+          border-radius: var(--radius-full);
+          background-color: var(--surface-2);
+          border: 1px solid var(--border-subtle);
+          color: var(--text-primary);
+          font-size: var(--text-sm);
+          font-weight: 500;
+          transition: background-color var(--transition-fast), border-color var(--transition-fast);
+        }
+        .navbar-saved-pill:hover {
+          background-color: var(--surface-3);
+          border-color: var(--border);
+        }
+        .navbar-saved-pill.active {
+          background-color: var(--surface-3);
+          border-color: var(--accent);
+          color: #fff;
+        }
+
+        .nav-signin-btn {
+          height: var(--control-h);
+          border-radius: var(--radius-full);
+          padding: 0 var(--space-4);
+          /* btn-secondary already provides the dark surface + border;
+             no overrides needed beyond geometry */
+        }
+
+        .navbar-auth-skeleton {
+          width: 76px;
+          height: var(--control-h);
+          border-radius: var(--radius-full);
+          background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+          background-size: 200% 100%;
+          animation: shimmer-rewind 1.4s infinite;
+        }
+
+        /* User Avatar Button */
+        .navbar-user-wrap {
+          position: relative;
+        }
+        .navbar-avatar-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          background-color: var(--accent);
+          color: #fff;
+          font-weight: 700;
+          font-size: var(--text-sm);
+          overflow: hidden;
+          transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+        }
+        .navbar-avatar-btn:hover {
+          transform: scale(1.05);
+          box-shadow: 0 0 0 2px var(--accent-ring);
+        }
+        .avatar-img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        .avatar-initial {
+          line-height: 1;
+        }
+
+        /* Avatar Menu Popover */
+        .avatar-menu-popover {
+          position: absolute;
+          top: calc(100% + 8px);
+          right: 0;
+          width: 240px;
+          max-width: min(320px, calc(100vw - 24px));
+          background-color: var(--surface-1);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-lg);
+          box-shadow: var(--shadow-lg), var(--surface-highlight);
+          padding: var(--space-2);
+          z-index: var(--z-popover);
+          animation: fadeIn 150ms var(--ease-standard);
+        }
+        .avatar-menu-header {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+          padding: var(--space-2);
+        }
+        .menu-avatar-circle {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          background-color: var(--accent);
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          font-size: var(--text-sm);
+          overflow: hidden;
+          flex-shrink: 0;
+        }
+        .menu-user-details {
+          display: flex;
+          flex-direction: column;
+          min-width: 0;
+        }
+        .menu-user-name {
+          font-size: var(--text-sm);
+          font-weight: 600;
+          color: var(--text-primary);
+        }
+        .menu-user-email {
+          font-size: var(--text-xs);
+          color: var(--text-muted);
+        }
+        .avatar-menu-divider {
+          height: 1px;
+          background-color: var(--border-subtle);
+          margin: var(--space-1) 0;
+        }
+        .avatar-menu-item {
+          display: flex;
+          align-items: center;
+          gap: var(--space-3);
+          width: 100%;
+          padding: var(--space-2) var(--space-3);
+          border-radius: var(--radius-md);
+          font-size: var(--text-sm);
+          color: var(--text-primary);
+          transition: background-color var(--transition-fast);
+          cursor: pointer;
+          min-height: 40px;
+          text-align: left;
+        }
+        .avatar-menu-item:hover {
+          background-color: var(--surface-3);
+        }
+        .signout-item {
+          color: var(--text-secondary);
+        }
+        .signout-item:hover {
+          color: var(--error);
+        }
+
+        /* Dropdown autocomplete */
         .nav-dropdown-menu {
           position: absolute;
           top: calc(100% + 6px);
           left: 0;
           right: 0;
-          background-color: var(--bg-secondary);
+          background-color: var(--surface-1);
           border: 1px solid var(--border);
           border-radius: var(--radius-lg);
-          box-shadow: var(--shadow-lg);
-          z-index: 200;
+          box-shadow: var(--shadow-lg), var(--surface-highlight);
+          z-index: var(--z-popover);
           overflow: hidden;
-          animation: dropDownAnim 0.18s ease-out;
-        }
-        .mobile-dropdown {
-          position: relative;
-          top: var(--space-2);
-          left: 0;
-          right: 0;
-        }
-        @keyframes dropDownAnim {
-          from {
-            opacity: 0;
-            transform: translateY(-6px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          animation: slideUp 160ms var(--ease-standard);
         }
         .nav-dropdown-loading {
           display: flex;
@@ -737,36 +912,34 @@ export default function NavBar() {
           padding: var(--space-5) var(--space-4);
           gap: var(--space-2);
         }
-        .empty-icon-wrap {
+        .empty-icon-circle {
           display: flex;
           align-items: center;
           justify-content: center;
           width: 44px;
           height: 44px;
-          border-radius: var(--radius-full);
-          background-color: rgba(255, 30, 64, 0.15);
-          color: #ff1e40;
+          border-radius: 50%;
+          background-color: var(--accent-subtle);
+          color: var(--accent);
           margin-bottom: var(--space-1);
         }
         .empty-title {
-          font-size: var(--text-base);
+          font-size: var(--text-sm);
           font-weight: 600;
           color: var(--text-primary);
         }
         .empty-desc {
           font-size: var(--text-xs);
           color: var(--text-secondary);
-          max-width: 380px;
-          line-height: 1.45;
+          max-width: 320px;
+          line-height: 1.4;
         }
-        .query-highlight {
-          color: var(--text-primary);
-        }
-        .empty-action-btn {
+        .empty-actions {
+          display: flex;
+          gap: var(--space-2);
           margin-top: var(--space-2);
-          font-size: var(--text-xs);
-          padding: var(--space-2) var(--space-4);
-          border-radius: var(--radius-full);
+          flex-wrap: wrap;
+          justify-content: center;
         }
         .nav-dropdown-results {
           display: flex;
@@ -777,7 +950,7 @@ export default function NavBar() {
           align-items: center;
           justify-content: space-between;
           padding: var(--space-2) var(--space-4);
-          background-color: var(--bg-tertiary);
+          background-color: var(--surface-2);
           border-bottom: 1px solid var(--border-subtle);
           font-size: var(--text-xs);
           font-weight: 600;
@@ -785,13 +958,12 @@ export default function NavBar() {
           text-transform: uppercase;
           letter-spacing: 0.5px;
         }
-        .dropdown-view-all-link {
-          color: #3ea6ff;
+        .dropdown-view-all {
+          color: var(--accent);
           font-weight: 500;
           text-transform: none;
-          letter-spacing: normal;
         }
-        .dropdown-view-all-link:hover {
+        .dropdown-view-all:hover {
           text-decoration: underline;
         }
         .dropdown-list {
@@ -807,38 +979,31 @@ export default function NavBar() {
           padding: var(--space-2) var(--space-4);
           border-bottom: 1px solid var(--border-subtle);
           transition: background-color var(--transition-fast);
-          text-decoration: none;
-          color: inherit;
-        }
-        .dropdown-item:last-child {
-          border-bottom: none;
         }
         .dropdown-item:hover {
-          background-color: var(--bg-hover);
+          background-color: var(--surface-2);
         }
-        .dropdown-thumb-wrap {
-          width: 56px;
+        .dropdown-thumb-box {
+          width: 64px;
           aspect-ratio: 16 / 9;
           border-radius: var(--radius-sm);
           overflow: hidden;
-          background-color: var(--bg-primary);
+          background-color: var(--surface-2);
           flex-shrink: 0;
         }
         .dropdown-thumb {
-          width: 56px;
-          height: 32px;
+          width: 100%;
+          height: 100%;
           object-fit: cover;
-          display: block;
-          flex-shrink: 0;
         }
-        .dropdown-thumb-placeholder {
+        .dropdown-thumb-fallback {
           width: 100%;
           height: 100%;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 10px;
           color: var(--text-muted);
+          font-size: 10px;
         }
         .dropdown-item-info {
           flex: 1;
@@ -849,126 +1014,43 @@ export default function NavBar() {
         }
         .dropdown-item-title {
           font-size: var(--text-sm);
-          font-weight: 500;
           color: var(--text-primary);
           line-height: 1.3;
         }
         .dropdown-item-channel {
           font-size: var(--text-xs);
-          color: var(--text-secondary);
-        }
-        .dropdown-go-icon {
           color: var(--text-muted);
-          flex-shrink: 0;
-          font-size: 20px;
-          line-height: 1;
-          transition: color var(--transition-fast);
-        }
-        .dropdown-item:hover .dropdown-go-icon {
-          color: var(--text-primary);
         }
         .dropdown-footer {
           padding: var(--space-2) var(--space-4);
-          background-color: var(--bg-tertiary);
+          background-color: var(--surface-2);
           border-top: 1px solid var(--border-subtle);
           text-align: center;
         }
-        .dropdown-footer-btn {
+        .dropdown-footer-link {
           font-size: var(--text-xs);
+          color: var(--text-secondary);
           font-weight: 500;
-          color: var(--text-secondary);
         }
-        .dropdown-footer-btn:hover {
+        .dropdown-footer-link:hover {
           color: var(--text-primary);
         }
 
-        .navbar-actions {
-          display: flex;
-          align-items: center;
-          gap: var(--space-2);
-          flex-shrink: 0;
-        }
-        .navbar-saved-btn.active {
-          background-color: var(--bg-tertiary);
-          color: var(--text-primary);
-        }
-        .navbar-mobile-search { display: none; }
-        .navbar-mobile-menu   { display: none; }
-
-        .navbar-auth-skeleton {
-          width: 76px;
-          height: 36px;
-          border-radius: var(--radius-md);
-          background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary) 50%, var(--bg-secondary) 75%);
-          background-size: 200% 100%;
-          animation: navShimmer 1.4s infinite;
-        }
-        @keyframes navShimmer { to { background-position: -200% 0; } }
-
-        .navbar-signin-btn {
-          font-size: var(--text-sm);
-          padding: var(--space-2) var(--space-4);
-          border-radius: var(--radius-md);
-          white-space: nowrap;
-        }
-
-        .navbar-user-menu {
-          display: flex;
-          align-items: center;
-          gap: var(--space-2);
-        }
-
-        .navbar-user-avatar {
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
-          background-color: var(--accent);
-          color: white;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 700;
-          font-size: var(--text-sm);
-          overflow: hidden;
-          flex-shrink: 0;
-          user-select: none;
-        }
-
-        .navbar-avatar-img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          border-radius: 50%;
-        }
-
-        .navbar-signout-btn {
-          font-size: var(--text-xs);
-          padding: var(--space-2) var(--space-3);
-          color: var(--text-secondary);
-        }
-        .navbar-signout-btn:hover {
-          color: var(--text-primary);
-        }
-
-        /* Option A Fullscreen Mobile Search Overlay */
-        .navbar-fullscreen-search {
+        /* ── Fullscreen Search Overlay for Compact Devices ── */
+        .search-overlay {
           position: fixed;
           inset: 0;
-          z-index: 1000;
+          z-index: var(--z-overlay);
           background-color: var(--bg-primary);
           display: flex;
           flex-direction: column;
-          animation: searchSlideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
           padding-top: max(var(--space-2), var(--safe-top));
           padding-bottom: max(var(--space-3), var(--safe-bottom));
           padding-left: max(var(--space-3), var(--safe-left));
           padding-right: max(var(--space-3), var(--safe-right));
+          animation: fadeIn 150ms var(--ease-standard);
         }
-        @keyframes searchSlideIn {
-          from { opacity: 0; transform: translateY(-8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .fullscreen-search-bar {
+        .search-overlay-bar {
           display: flex;
           align-items: center;
           gap: var(--space-2);
@@ -977,64 +1059,32 @@ export default function NavBar() {
           padding: 0 var(--space-2);
           flex-shrink: 0;
         }
-        .search-back-btn {
-          color: var(--text-primary);
-          width: 44px;
-          height: 44px;
-        }
-        .fullscreen-search-form {
+        .search-overlay-form {
           flex: 1;
           display: flex;
           align-items: center;
-          background-color: var(--bg-secondary);
+          background-color: var(--surface-2);
           border: 1px solid var(--border);
           border-radius: var(--radius-full);
-          overflow: hidden;
-          height: 42px;
-          padding: 0 var(--space-1);
+          height: var(--control-h);
+          padding: 0 var(--space-3);
         }
-        .fullscreen-search-form:focus-within {
-          border-color: #1c62b9;
-        }
-        .fullscreen-search-input {
+        .search-overlay-input {
           flex: 1;
           background: transparent;
           border: none;
           outline: none;
           color: var(--text-primary);
           font-size: var(--text-base);
-          padding: 0 var(--space-3);
           min-width: 0;
         }
-        .fullscreen-search-clear {
-          padding: 0 var(--space-2);
-          color: var(--text-muted);
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          height: 100%;
-        }
-        .fullscreen-search-clear:hover {
-          color: var(--text-primary);
-        }
-        .fullscreen-search-submit {
-          padding: 0 var(--space-3);
-          color: var(--text-primary);
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          height: 100%;
-          border-left: 1px solid var(--border);
-        }
-        .fullscreen-search-content {
+        .search-overlay-content {
           flex: 1;
           overflow-y: auto;
           -webkit-overflow-scrolling: touch;
-          padding: var(--space-2) 0;
+          padding: var(--space-3) 0;
         }
-        .fullscreen-search-empty {
+        .search-overlay-hint {
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -1043,155 +1093,60 @@ export default function NavBar() {
           gap: var(--space-2);
           color: var(--text-muted);
         }
-
-        /* Mobile Drawer & Backdrop */
-        .navbar-mobile-backdrop {
-          position: fixed;
-          inset: 0;
-          z-index: 99;
-          background-color: rgba(0, 0, 0, 0.6);
-          backdrop-filter: blur(4px);
-          -webkit-backdrop-filter: blur(4px);
-          animation: fadeIn var(--transition-fast);
-        }
-        .navbar-mobile-drawer {
-          position: absolute;
-          top: var(--nav-height);
-          left: 0;
-          right: 0;
-          max-height: calc(100dvh - var(--nav-height));
-          overflow-y: auto;
-          background-color: var(--bg-secondary);
-          border-bottom: 1px solid var(--border);
-          box-shadow: var(--shadow-lg);
-          padding: var(--space-3) max(var(--space-4), var(--safe-right)) max(var(--space-5), var(--safe-bottom)) max(var(--space-4), var(--safe-left));
-          display: flex;
-          flex-direction: column;
-          gap: var(--space-3);
-          animation: drawerSlideDown 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        @keyframes drawerSlideDown {
-          from { opacity: 0; transform: translateY(-12px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .drawer-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding-bottom: var(--space-2);
-          border-bottom: 1px solid var(--border-subtle);
-        }
-        .drawer-title {
-          font-size: var(--text-xs);
+        .hint-title {
+          font-size: var(--text-base);
           font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          color: var(--text-muted);
-        }
-        .navbar-mobile-link {
-          display: flex;
-          align-items: center;
-          gap: var(--space-3);
-          padding: var(--space-3);
-          border-radius: var(--radius-md);
           color: var(--text-primary);
-          font-size: var(--text-sm);
-          font-weight: 500;
-          min-height: 48px;
         }
-        .navbar-mobile-link.active {
-          background-color: var(--bg-tertiary);
-        }
-        .navbar-mobile-auth {
-          padding-top: var(--space-2);
-          border-top: 1px solid var(--border-subtle);
-        }
-        .navbar-mobile-user {
-          display: flex;
-          flex-direction: column;
-          gap: var(--space-3);
-        }
-        .navbar-mobile-user-info {
-          display: flex;
-          align-items: center;
-          gap: var(--space-3);
-        }
-        .navbar-mobile-user-name {
-          font-size: var(--text-sm);
-          color: var(--text-primary);
-          font-weight: 500;
+        .hint-desc {
+          font-size: var(--text-xs);
+          color: var(--text-secondary);
+          max-width: 320px;
+          margin-bottom: var(--space-2);
         }
 
-        @media (max-width: 720px) {
-          .navbar-search-container {
+        /* ── Container Queries on .navbar-container ── */
+        @container nav-container (max-width: 899px) {
+          .navbar-search-pill-wrap {
+            max-width: 360px;
+          }
+          .saved-pill-label {
             display: none;
           }
-          .navbar-saved-btn {
+          .navbar-saved-pill {
+            padding: 0 var(--space-3);
+          }
+        }
+
+        @container nav-container (max-width: 599px) {
+          .navbar-search-pill-wrap {
             display: none;
           }
-          .navbar-signin-btn, .navbar-user-menu {
+          .navbar-saved-pill {
             display: none;
           }
-          .navbar-mobile-search { display: flex; }
-          .navbar-mobile-menu   { display: flex; }
-          .navbar-logo-text { font-size: var(--text-base); }
+          .navbar-search-toggle-btn {
+            display: inline-flex;
+          }
+        }
+
+        @container nav-container (max-width: 339px) {
+          .navbar-logo-text {
+            display: none;
+          }
         }
 
         @media (pointer: coarse) {
-          .navbar-mobile-search,
-          .navbar-mobile-menu,
-          .navbar-search-btn {
+          .navbar-search-toggle-btn {
             min-width: 44px;
             min-height: 44px;
+          }
+          .navbar-avatar-btn {
+            min-width: 40px;
+            min-height: 40px;
           }
         }
       `}</style>
     </>
   );
 }
-
-function ArrowLeftIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <line x1="19" y1="12" x2="5" y2="12" />
-      <polyline points="12 19 5 12 12 5" />
-    </svg>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="11" cy="11" r="8"/>
-      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-    </svg>
-  );
-}
-
-function BookmarkIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-    </svg>
-  );
-}
-
-function MenuIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <line x1="3" y1="12" x2="21" y2="12"/>
-      <line x1="3" y1="6" x2="21" y2="6"/>
-      <line x1="3" y1="18" x2="21" y2="18"/>
-    </svg>
-  );
-}
-
-function CloseIconSmall() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <line x1="18" y1="6" x2="6" y2="18"/>
-      <line x1="6" y1="6" x2="18" y2="18"/>
-    </svg>
-  );
-}
-
